@@ -1,0 +1,1 @@
+curl -fsSL | sudo bash
