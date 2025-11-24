@@ -403,20 +403,10 @@ chown root:root "$CRON_JOB"
 log_success "Weekly update cron created."
 
 # -------------------------
-# Certbot (snap) - obtain TLS and configure nginx
+# Certbot (apt) - obtain TLS and configure nginx
 # -------------------------
-log_info "Installing Certbot via Snap..."
-if ! command -v snap >/dev/null 2>&1; then
-  apt-get install -y snapd
-  systemctl enable --now snapd.socket
-  sleep 3
-fi
-snap install core || true
-snap refresh core || true
-if ! snap list certbot >/dev/null 2>&1; then
-  snap install --classic certbot
-fi
-ln -sf /snap/bin/certbot /usr/bin/certbot
+log_info "Installing Certbot and Python3-Certbot-Nginx via apt..."
+apt-get install -y certbot python3-certbot-nginx
 
 CERT_DOMAINS=("-d" "$DOMAIN")
 if [ -n "$WWW_DOMAIN" ]; then CERT_DOMAINS+=("-d" "$WWW_DOMAIN"); fi
@@ -426,8 +416,9 @@ certbot --nginx "${CERT_DOMAINS[@]}" --email "$LE_EMAIL" --agree-tos --no-eff-em
   log_error "Certbot reported issues. You may need to run it manually."
 }
 
-# Ensure certbot renewal service is enabled
-systemctl enable --now snap.certbot.renew.service || true
+# Ensure certbot renewal service/timer is enabled
+log_info "Enabling Certbot renewal timer..."
+systemctl enable --now certbot.timer
 
 # -------------------------
 # Unattended security updates
@@ -510,7 +501,7 @@ systemctl reload nginx || true
   echo "Notes:"
   echo " - Webroot: $WEB_ROOT"
   echo " - WP weekly update cron: $CRON_JOB"
-  echo " - Certbot (snap) used to request TLS"
+  echo " - Certbot (apt) used to request TLS"
 } > "$CRED_FILE"
 
 chmod 600 "$CRED_FILE"
