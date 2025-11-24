@@ -20,7 +20,7 @@ curl -fsSL "${BASE_URL}/setup-swap.sh" -o setup-swap.sh
 curl -fsSL "${BASE_URL}/setup-wp-nginx.sh" -o setup-wp-nginx.sh
 
 # Make them executable
-chmod +x 20-swap.sh setup-wp-nginx.sh
+chmod +x setup-swap.sh setup-wp-nginx.sh
 
 echo "-----------------------------------------------------"
 echo "Step 1/2: Setting up Swap"
