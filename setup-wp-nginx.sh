@@ -4,15 +4,54 @@ set -euo pipefail
 # setup-wp-nginx.sh
 # Installs nginx + PHP 8.3 (Ondrej PPA) + MariaDB + WordPress with hardening and tuning
 
-# Run as root on Ubuntu/Debian: sudo bash setup-wp-nginx.sh
+# -------------------------
+# Formatting & Logging Helper Functions
+# -------------------------
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+log_info() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+log_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
+
+log_warn() {
+    echo -e "${YELLOW}[WARN]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+# Error Handler Trap
+error_handler() {
+    local line_no=$1
+    log_error "Script failed at line $line_no."
+    exit 1
+}
+trap 'error_handler ${LINENO}' ERR
+
+# -------------------------
+# Root Check
+# -------------------------
 if [ "$(id -u)" -ne 0 ]; then
-  echo "Please run as root: sudo $0"
+  log_error "Please run as root: sudo $0"
   exit 1
 fi
 
 # -------------------------
 # Interactive inputs
 # -------------------------
+echo "-------------------------------------------------------"
+log_info "Starting WordPress Nginx/PHP 8.3 Setup Wizard"
+echo "-------------------------------------------------------"
+
 read -rp "Domain to install WordPress for (example: example.com): " DOMAIN
 read -rp "Enable www.$DOMAIN as alias? (y/n) [y]: " USE_WWW
 USE_WWW=${USE_WWW:-y}
@@ -26,11 +65,11 @@ read -rp "Enable fail2ban (SSH jail) (y/n) [y]: " ENABLE_FAIL2BAN
 ENABLE_FAIL2BAN=${ENABLE_FAIL2BAN:-y}
 
 echo
-echo "Make sure the DNS A record for $DOMAIN points to this VM's external IP before continuing."
+log_warn "Make sure the DNS A record for $DOMAIN points to this VM's external IP."
 read -rp "Continue? (y/n) [y]: " CONT
 CONT=${CONT:-y}
 if [[ ! "$CONT" =~ ^[Yy]$ ]]; then
-  echo "Aborted."
+  log_warn "Aborted by user."
   exit 0
 fi
 
@@ -49,6 +88,7 @@ export DEBIAN_FRONTEND=noninteractive
 # -------------------------
 # Generate credentials
 # -------------------------
+log_info "Generating secure passwords..."
 MYSQL_ROOT_PASS=$(openssl rand -base64 18 | tr -d '\n' )
 WP_ADMIN_USER="user"
 WP_ADMIN_PASS=$(openssl rand -base64 18 | tr -d '\n' )
@@ -57,10 +97,11 @@ WP_DB_PASS=$(openssl rand -base64 18 | tr -d '\n' )
 # -------------------------
 # System packages & Ondrej PHP PPA for PHP 8.3
 # -------------------------
+log_info "Updating system packages and repositories..."
 apt-get update -y
 apt-get install -y software-properties-common ca-certificates lsb-release apt-transport-https curl gnupg2 wget htop rsync zip unzip
 
-# Add Ondrej PPA and install PHP 8.3 + extensions
+log_info "Adding Ondrej PPA and installing PHP 8.3 + Extensions..."
 add-apt-repository -y ppa:ondrej/php
 add-apt-repository -y ppa:ondrej/nginx
 apt-get update -y
@@ -69,21 +110,22 @@ apt-get install -y nginx mariadb-server \
   php8.3 php8.3-fpm php8.3-cli php8.3-mysql php8.3-curl \
   php8.3-gd php8.3-mbstring php8.3-xml php8.3-zip php8.3-intl php8.3-opcache php8.3-imagick
 
-# Enable & start services
+log_info "Enabling services..."
 systemctl enable --now nginx
 systemctl enable --now php8.3-fpm
 
 # -------------------------
 # PHP-FPM & PHP.ini tuning (FPM pool + opcache + php.ini)
 # -------------------------
+log_info "Tuning PHP-FPM configuration..."
 PHP_FPM_SOCK="/run/php/php8.3-fpm.sock"
 if [ ! -S "$PHP_FPM_SOCK" ]; then
-  echo "ERROR: php8.3-fpm socket not found at $PHP_FPM_SOCK"
-  echo "Check php8.3-fpm status: systemctl status php8.3-fpm"
+  log_error "php8.3-fpm socket not found at $PHP_FPM_SOCK"
+  log_info "Check php8.3-fpm status: systemctl status php8.3-fpm"
   exit 1
 fi
 
-# Determine CPU cores and set pool sizing (sensible defaults; tune for your machine)
+# Determine CPU cores and set pool sizing
 CORES=$(nproc)
 # formulas (conservative default): max_children = cores * 5 (min 5), start = cores * 2
 MAX_CHILDREN=$(( CORES * 5 ))
@@ -93,6 +135,8 @@ if [ "$START_SERVERS" -lt 2 ]; then START_SERVERS=2; fi
 MIN_SPARE_SERVERS=$CORES
 MAX_SPARE_SERVERS=$(( CORES * 3 ))
 PM_MAX_REQUESTS=500
+
+log_info "Pool Sizing: Cores=$CORES | Max Children=$MAX_CHILDREN"
 
 # Update FPM pool config
 FPM_POOL_CONF="/etc/php/8.3/fpm/pool.d/www.conf"
@@ -123,6 +167,7 @@ if [ -f "$PHP_FPM_INI" ]; then
 fi
 
 # Configure OPcache for performance
+log_info "Configuring OPcache..."
 OPCACHE_CONF="/etc/php/8.3/mods-available/opcache.ini"
 cat > "$OPCACHE_CONF" <<'OPC'
 ; Enable OPcache
@@ -140,10 +185,12 @@ OPC
 
 # Restart PHP-FPM for changes
 systemctl restart php8.3-fpm
+log_success "PHP 8.3 tuned and restarted."
 
 # -------------------------
 # nginx site & security headers
 # -------------------------
+log_info "Configuring Nginx server block for $DOMAIN..."
 mkdir -p "$WEB_ROOT"
 chown -R www-data:www-data "$WEB_ROOT"
 chmod -R 755 "$WEB_ROOT"
@@ -219,10 +266,12 @@ fi
 
 nginx -t
 systemctl reload nginx
+log_success "Nginx configured."
 
 # -------------------------
 # Harden MariaDB root account & create WP DB/user
 # -------------------------
+log_info "Creating Database and User..."
 
 # FIX: Create the WordPress database and user FIRST while we still have passwordless root access.
 mysql -e "CREATE DATABASE IF NOT EXISTS \`${WP_DB}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
@@ -230,6 +279,7 @@ mysql -e "CREATE USER IF NOT EXISTS '${WP_DB_USER}'@'localhost' IDENTIFIED BY '$
 mysql -e "GRANT ALL PRIVILEGES ON \`${WP_DB}\`.* TO '${WP_DB_USER}'@'localhost';"
 mysql -e "FLUSH PRIVILEGES;"
 
+log_info "Hardening MariaDB Root account and removing test data..."
 # Extra: ensure no anonymous users and no test DB
 mysql -e "DELETE FROM mysql.user WHERE User='';" || true
 mysql -e "DROP DATABASE IF EXISTS test;" || true
@@ -242,15 +292,19 @@ ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASS}';
 FLUSH PRIVILEGES;
 SQL
 
+log_success "Database configured successfully."
+
 # -------------------------
 # Download WordPress and set permissions
 # -------------------------
+log_info "Downloading and installing WordPress Core..."
 cd "$TMPDIR"
 wget -q https://wordpress.org/latest.zip -O latest.zip
 unzip -q latest.zip
 rsync -a wordpress/ "$WEB_ROOT/"
 
 # Ownership & baseline perms
+log_info "Applying permission hardening..."
 chown -R root:www-data "$WEB_ROOT"
 find "$WEB_ROOT" -type d -exec chmod 755 {} \;
 find "$WEB_ROOT" -type f -exec chmod 640 {} \;
@@ -263,6 +317,7 @@ find "$WEB_ROOT/wp-content" -type f -exec chmod 664 {} \;
 # -------------------------
 # wp-config and salts, hardening constants
 # -------------------------
+log_info "Generating wp-config.php and fetching Salts..."
 WP_CONFIG="$WEB_ROOT/wp-config.php"
 cp "$WEB_ROOT/wp-config-sample.php" "$WP_CONFIG"
 
@@ -294,6 +349,7 @@ rm -f "$WEB_ROOT/readme.html" "$WEB_ROOT/license.txt" || true
 # WP-CLI install + WordPress core install
 # -------------------------
 if ! command -v wp >/dev/null 2>&1; then
+  log_info "Installing WP-CLI..."
   curl -sSL https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar -o /usr/local/bin/wp
   chmod +x /usr/local/bin/wp
 fi
@@ -303,6 +359,7 @@ SITE_URL="http://$DOMAIN"
 SITE_TITLE="$DOMAIN"
 
 if ! sudo -u www-data -- wp --path="$WEB_ROOT" core is-installed --allow-root 2>/dev/null; then
+  log_info "Running WP-CLI Core Install..."
   sudo -u www-data -- wp --path="$WEB_ROOT" core install \
     --url="$SITE_URL" \
     --title="$SITE_TITLE" \
@@ -311,10 +368,14 @@ if ! sudo -u www-data -- wp --path="$WEB_ROOT" core is-installed --allow-root 2>
     --admin_email="$LE_EMAIL" \
     --skip-email \
     --allow-root
+  log_success "WordPress Core Installed."
+else
+  log_info "WordPress already installed. Skipping core install."
 fi
 
 # If 'admin' exists, reassign posts to 'user' and delete admin
 if sudo -u www-data -- wp --path="$WEB_ROOT" user get admin --field=ID --allow-root >/dev/null 2>&1; then
+  log_info "Removing default 'admin' user..."
   sudo -u www-data -- wp --path="$WEB_ROOT" user delete admin --reassign="$WP_ADMIN_USER" --allow-root || true
 fi
 
@@ -322,6 +383,7 @@ fi
 sudo -u www-data -- wp --path="$WEB_ROOT" user set-role "$WP_ADMIN_USER" administrator --allow-root || true
 
 # Enable plugin/theme auto-updates
+log_info "Enabling Plugin/Theme auto-updates..."
 sudo -u www-data -- wp --path="$WEB_ROOT" plugin auto-updates enable --all --allow-root || true
 sudo -u www-data -- wp --path="$WEB_ROOT" theme auto-updates enable --all --allow-root || true
 
@@ -338,10 +400,12 @@ CRON
 sed -i "s|PLACEHOLDER_DOCROOT|$WEB_ROOT|g" "$CRON_JOB"
 chmod 750 "$CRON_JOB"
 chown root:root "$CRON_JOB"
+log_success "Weekly update cron created."
 
 # -------------------------
 # Certbot (snap) - obtain TLS and configure nginx
 # -------------------------
+log_info "Installing Certbot via Snap..."
 if ! command -v snap >/dev/null 2>&1; then
   apt-get install -y snapd
   systemctl enable --now snapd.socket
@@ -357,8 +421,9 @@ ln -sf /snap/bin/certbot /usr/bin/certbot
 CERT_DOMAINS=("-d" "$DOMAIN")
 if [ -n "$WWW_DOMAIN" ]; then CERT_DOMAINS+=("-d" "$WWW_DOMAIN"); fi
 
+log_info "Requesting SSL Certificate. If this fails, check your DNS records!"
 certbot --nginx "${CERT_DOMAINS[@]}" --email "$LE_EMAIL" --agree-tos --no-eff-email --redirect --expand --non-interactive || {
-  echo "Certbot reported issues (it may require manual intervention). Re-run certbot if needed."
+  log_error "Certbot reported issues. You may need to run it manually."
 }
 
 # Ensure certbot renewal service is enabled
@@ -367,6 +432,7 @@ systemctl enable --now snap.certbot.renew.service || true
 # -------------------------
 # Unattended security updates
 # -------------------------
+log_info "Configuring Unattended Upgrades..."
 apt-get install -y unattended-upgrades apt-listchanges
 dpkg-reconfigure -f noninteractive unattended-upgrades || true
 
@@ -374,6 +440,7 @@ dpkg-reconfigure -f noninteractive unattended-upgrades || true
 # Fail2ban (optional)
 # -------------------------
 if [[ "$ENABLE_FAIL2BAN" =~ ^[Yy] ]]; then
+  log_info "Installing and configuring Fail2Ban..."
   apt-get install -y fail2ban
   systemctl enable --now fail2ban
   cat > /etc/fail2ban/jail.local <<'JAIL'
@@ -389,11 +456,13 @@ port = ssh
 logpath = %(sshd_log)s
 JAIL
   systemctl restart fail2ban
+  log_success "Fail2Ban active."
 fi
 
 # -------------------------
 # Final perms & cleanup
 # -------------------------
+log_info "Finalizing permissions and cleaning up..."
 # Ensure wp-config locked
 chmod 640 "$WP_CONFIG" || true
 chown root:www-data "$WP_CONFIG" || true
@@ -453,25 +522,25 @@ chown root:root "$CRED_FILE"
 cat <<EOF
 
 ==============================================================
-WordPress installation complete for: $DOMAIN
+${GREEN}WordPress installation complete for: $DOMAIN${NC}
 
-Credentials saved to: $CRED_FILE (mode 600)
+Credentials saved to: ${YELLOW}$CRED_FILE${NC} (mode 600)
 -- Displaying generated credentials (also saved) --
 
-MySQL root password:
+${BLUE}MySQL root password:${NC}
 $MYSQL_ROOT_PASS
 
-WordPress DB:
+${BLUE}WordPress DB:${NC}
   DB name: $WP_DB
   DB user: $WP_DB_USER
   DB password: $WP_DB_PASS
 
-WordPress admin (new) account:
+${BLUE}WordPress admin (new) account:${NC}
   Username: $WP_ADMIN_USER
   Password: $WP_ADMIN_PASS
   Admin email: $LE_EMAIL
 
-PHP-FPM tuning (www pool):
+${BLUE}PHP-FPM tuning (www pool):${NC}
   cpu_cores = $CORES
   pm.max_children = $MAX_CHILDREN
   pm.start_servers = $START_SERVERS
