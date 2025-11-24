@@ -3,8 +3,8 @@ set -euo pipefail
 
 # setup-wp-nginx.sh
 # Installs nginx + PHP 8.3 (Ondrej PPA) + MariaDB + WordPress with hardening and tuning
-# Run as root on Ubuntu/Debian: sudo bash setup-wp-nginx.sh
 
+# Run as root on Ubuntu/Debian: sudo bash setup-wp-nginx.sh
 if [ "$(id -u)" -ne 0 ]; then
   echo "Please run as root: sudo $0"
   exit 1

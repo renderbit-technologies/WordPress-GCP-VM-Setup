@@ -3,9 +3,8 @@ set -euo pipefail
 
 # setup-swap.sh
 # Configure a 2 GB swapfile with persistence
-# Run as root on Ubuntu/Debian: sudo bash setup-swap.sh
 
-# Run as root on Ubuntu/Debian: sudo bash setup-wp-nginx-php8.3-prod.sh
+# Run as root on Ubuntu/Debian: sudo bash setup-swap.sh
 if [ "$(id -u)" -ne 0 ]; then
   echo "Please run as root: sudo $0"
   exit 1

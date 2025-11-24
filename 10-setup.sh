@@ -1,2 +1,0 @@
-curl -fsSL https://gist.githubusercontent.com/soham2008xyz/bb3964121c42a87f3f99250edb93c1d9/raw/9a9ffc89bcea6adb0f12013eb212c7a31478d0d8/20-swap.sh | sudo bash
-curl -fsSL https://gist.githubusercontent.com/soham2008xyz/bb3964121c42a87f3f99250edb93c1d9/raw/9a9ffc89bcea6adb0f12013eb212c7a31478d0d8/30-wordpress.sh | sudo bash
