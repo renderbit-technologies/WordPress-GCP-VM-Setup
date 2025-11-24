@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# setup-wp-nginx-php8.3-prod.sh
+# setup-wp-nginx.sh
 # Installs nginx + PHP 8.3 (Ondrej PPA) + MariaDB + WordPress with hardening and tuning
-# Run as root on Ubuntu/Debian: sudo bash setup-wp-nginx-php8.3-prod.sh
+# Run as root on Ubuntu/Debian: sudo bash setup-wp-nginx.sh
 
 if [ "$(id -u)" -ne 0 ]; then
   echo "Please run as root: sudo $0"
@@ -58,10 +58,11 @@ WP_DB_PASS=$(openssl rand -base64 18 | tr -d '\n' )
 # System packages & Ondrej PHP PPA for PHP 8.3
 # -------------------------
 apt-get update -y
-apt-get install -y software-properties-common ca-certificates lsb-release apt-transport-https curl gnupg2
+apt-get install -y software-properties-common ca-certificates lsb-release apt-transport-https curl gnupg2 wget htop rsync zip unzip
 
 # Add Ondrej PPA and install PHP 8.3 + extensions
 add-apt-repository -y ppa:ondrej/php
+add-apt-repository -y ppa:ondrej/nginx
 apt-get update -y
 
 apt-get install -y nginx mariadb-server \
