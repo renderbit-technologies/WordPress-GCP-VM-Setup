@@ -519,50 +519,48 @@ chown root:root "$CRED_FILE"
 # -------------------------
 # Final output
 # -------------------------
-cat <<EOF
-
-==============================================================
-${GREEN}WordPress installation complete for: $DOMAIN${NC}
-
-Credentials saved to: ${YELLOW}$CRED_FILE${NC} (mode 600)
--- Displaying generated credentials (also saved) --
-
-${BLUE}MySQL root password:${NC}
-$MYSQL_ROOT_PASS
-
-${BLUE}WordPress DB:${NC}
-  DB name: $WP_DB
-  DB user: $WP_DB_USER
-  DB password: $WP_DB_PASS
-
-${BLUE}WordPress admin (new) account:${NC}
-  Username: $WP_ADMIN_USER
-  Password: $WP_ADMIN_PASS
-  Admin email: $LE_EMAIL
-
-${BLUE}PHP-FPM tuning (www pool):${NC}
-  cpu_cores = $CORES
-  pm.max_children = $MAX_CHILDREN
-  pm.start_servers = $START_SERVERS
-  pm.min_spare_servers = $MIN_SPARE_SERVERS
-  pm.max_spare_servers = $MAX_SPARE_SERVERS
-  pm.max_requests = $PM_MAX_REQUESTS
-
-Important notes:
- - Visit https://$DOMAIN to finish and log in. FORCE_SSL_ADMIN is enabled.
- - Ensure GCP VPC firewall allows ingress TCP 80 and 443 to this VM.
- - If certbot failed, re-run:
-     sudo certbot --nginx -d $DOMAIN ${WWW_DOMAIN:+-d $WWW_DOMAIN} -m $LE_EMAIL --agree-tos --redirect --expand
- - Review PHP-FPM pool values for your instance class. Larger sites may need higher pm.max_children and more memory.
- - For stricter security consider WAF (Cloud Armor or modsecurity), CDN, and backups.
-
-To view credentials:
-  sudo cat $CRED_FILE
-
-To manually run WP updates:
-  sudo -u www-data -- wp --path="$WEB_ROOT" core update --allow-root
-  sudo -u www-data -- wp --path="$WEB_ROOT" plugin update --all --allow-root
-  sudo -u www-data -- wp --path="$WEB_ROOT" theme update --all --allow-root
-
-==============================================================
-EOF
+echo -e ""
+echo -e "=============================================================="
+echo -e "${GREEN}WordPress installation complete for: $DOMAIN${NC}"
+echo -e ""
+echo -e "Credentials saved to: ${YELLOW}$CRED_FILE${NC} (mode 600)"
+echo -e "-- Displaying generated credentials (also saved) --"
+echo -e ""
+echo -e "${BLUE}MySQL root password:${NC}"
+echo -e "$MYSQL_ROOT_PASS"
+echo -e ""
+echo -e "${BLUE}WordPress DB:${NC}"
+echo -e "  DB name: $WP_DB"
+echo -e "  DB user: $WP_DB_USER"
+echo -e "  DB password: $WP_DB_PASS"
+echo -e ""
+echo -e "${BLUE}WordPress admin (new) account:${NC}"
+echo -e "  Username: $WP_ADMIN_USER"
+echo -e "  Password: $WP_ADMIN_PASS"
+echo -e "  Admin email: $LE_EMAIL"
+echo -e ""
+echo -e "${BLUE}PHP-FPM tuning (www pool):${NC}"
+echo -e "  cpu_cores = $CORES"
+echo -e "  pm.max_children = $MAX_CHILDREN"
+echo -e "  pm.start_servers = $START_SERVERS"
+echo -e "  pm.min_spare_servers = $MIN_SPARE_SERVERS"
+echo -e "  pm.max_spare_servers = $MAX_SPARE_SERVERS"
+echo -e "  pm.max_requests = $PM_MAX_REQUESTS"
+echo -e ""
+echo -e "Important notes:"
+echo -e " - Visit https://$DOMAIN to finish and log in. FORCE_SSL_ADMIN is enabled."
+echo -e " - Ensure GCP VPC firewall allows ingress TCP 80 and 443 to this VM."
+echo -e " - If certbot failed, re-run:"
+echo -e "     sudo certbot --nginx -d $DOMAIN ${WWW_DOMAIN:+-d $WWW_DOMAIN} -m $LE_EMAIL --agree-tos --redirect --expand"
+echo -e " - Review PHP-FPM pool values for your instance class. Larger sites may need higher pm.max_children and more memory."
+echo -e " - For stricter security consider WAF (Cloud Armor or modsecurity), CDN, and backups."
+echo -e ""
+echo -e "To view credentials:"
+echo -e "  sudo cat $CRED_FILE"
+echo -e ""
+echo -e "To manually run WP updates:"
+echo -e "  sudo -u www-data -- wp --path=\"$WEB_ROOT\" core update --allow-root"
+echo -e "  sudo -u www-data -- wp --path=\"$WEB_ROOT\" plugin update --all --allow-root"
+echo -e "  sudo -u www-data -- wp --path=\"$WEB_ROOT\" theme update --all --allow-root"
+echo -e ""
+echo -e "=============================================================="
