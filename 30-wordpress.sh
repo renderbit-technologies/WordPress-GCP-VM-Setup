@@ -58,10 +58,11 @@ WP_DB_PASS=$(openssl rand -base64 18 | tr -d '\n' )
 # System packages & Ondrej PHP PPA for PHP 8.3
 # -------------------------
 apt-get update -y
-apt-get install -y software-properties-common ca-certificates lsb-release apt-transport-https curl gnupg2
+apt-get install -y software-properties-common ca-certificates lsb-release apt-transport-https curl gnupg2 wget zip unzip htop rsync
 
 # Add Ondrej PPA and install PHP 8.3 + extensions
 add-apt-repository -y ppa:ondrej/php
+add-apt-repository -y ppa:ondrej/nginx
 apt-get update -y
 
 apt-get install -y nginx mariadb-server \
