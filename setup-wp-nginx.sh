@@ -327,8 +327,8 @@ SALT=$(curl -s https://api.wordpress.org/secret-key/1.1/salt/)
 if [ -n "$SALT" ]; then
   # FIX: Export SALT and use $ENV{SALT} in perl to avoid regex injection errors
   export SALT
-  # Regex updated to match from AUTH_KEY down to NONCE_SALT (the entire block)
-  perl -i -0777 -pe "s/define\('AUTH_KEY'.+?NONCE_SALT'.+?\);/\$ENV{SALT}/s" "$WP_CONFIG"
+  # Regex updated: Uses pipe | delimiter to avoid Salt collisions and \s* to handle WP coding standards
+  perl -i -0777 -pe "s|define\(\s*'AUTH_KEY'.+?NONCE_SALT'.+?\);|\$ENV{SALT}|s" "$WP_CONFIG"
 fi
 
 cat >> "$WP_CONFIG" <<'WPSEC'
