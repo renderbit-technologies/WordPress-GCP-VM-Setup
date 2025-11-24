@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# setup-wp-nginx-php8.3-prod-v2.sh
+# setup-wp-nginx-php8.3-prod.sh
 # Installs nginx + PHP 8.3 (Ondrej PPA) + MariaDB + WordPress with hardening and tuning
-# INCLUDES FIXES: Nginx client_max_body_size, fastcgi_read_timeout, and WP SITE_URL logic.
-# Run as root on Ubuntu/Debian: sudo bash setup-wp-nginx-php8.3-prod-v2.sh
+# Run as root on Ubuntu/Debian: sudo bash setup-wp-nginx-php8.3-prod.sh
 
 if [ "$(id -u)" -ne 0 ]; then
   echo "Please run as root: sudo $0"
@@ -158,7 +157,6 @@ add_header Content-Security-Policy "default-src 'self' 'unsafe-inline' data: htt
 NGSEC
 
 # Create nginx server block (HTTP). certbot will handle HTTPS redirect.
-# UPDATED: Includes client_max_body_size and fastcgi_read_timeout
 cat > "$NGINX_SITE" <<NGINX
 server {
     listen 80;
@@ -167,9 +165,6 @@ server {
 
     root $WEB_ROOT;
     index index.php index.html index.htm;
-
-    # Matched to PHP upload limits (64M)
-    client_max_body_size 64M;
 
     include /etc/nginx/snippets/security-headers.conf;
 
@@ -204,8 +199,6 @@ server {
         fastcgi_pass unix:$PHP_FPM_SOCK;
         fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
         include fastcgi_params;
-        # Matched to PHP max_execution_time (300s)
-        fastcgi_read_timeout 300;
     }
 
     # Deny hidden files
@@ -229,11 +222,12 @@ systemctl reload nginx
 # -------------------------
 # Harden MariaDB root account & create WP DB/user
 # -------------------------
-# Set MySQL root password (we are root at OS level so can connect via socket)
-mysql <<SQL || true
-ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASS}';
-FLUSH PRIVILEGES;
-SQL
+
+# FIX: Create the WordPress database and user FIRST while we still have passwordless root access.
+mysql -e "CREATE DATABASE IF NOT EXISTS \`${WP_DB}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+mysql -e "CREATE USER IF NOT EXISTS '${WP_DB_USER}'@'localhost' IDENTIFIED BY '${WP_DB_PASS}';"
+mysql -e "GRANT ALL PRIVILEGES ON \`${WP_DB}\`.* TO '${WP_DB_USER}'@'localhost';"
+mysql -e "FLUSH PRIVILEGES;"
 
 # Extra: ensure no anonymous users and no test DB
 mysql -e "DELETE FROM mysql.user WHERE User='';" || true
@@ -241,11 +235,11 @@ mysql -e "DROP DATABASE IF EXISTS test;" || true
 mysql -e "DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';" || true
 mysql -e "FLUSH PRIVILEGES;" || true
 
-# Create WordPress DB and user
-mysql -e "CREATE DATABASE IF NOT EXISTS \`${WP_DB}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
-mysql -e "CREATE USER IF NOT EXISTS '${WP_DB_USER}'@'localhost' IDENTIFIED BY '${WP_DB_PASS}';"
-mysql -e "GRANT ALL PRIVILEGES ON \`${WP_DB}\`.* TO '${WP_DB_USER}'@'localhost';"
-mysql -e "FLUSH PRIVILEGES;"
+# Set MySQL root password LAST (this cuts off passwordless socket access)
+mysql <<SQL || true
+ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASS}';
+FLUSH PRIVILEGES;
+SQL
 
 # -------------------------
 # Download WordPress and set permissions
@@ -303,12 +297,7 @@ if ! command -v wp >/dev/null 2>&1; then
 fi
 
 # Install WP (non-interactive). Use HTTP initially (Certbot will enable HTTPS).
-# UPDATED: Uses logic to set SITE_URL to WWW if selected
-if [ -n "$WWW_DOMAIN" ]; then
-  SITE_URL="http://$WWW_DOMAIN"
-else
-  SITE_URL="http://$DOMAIN"
-fi
+SITE_URL="http://$DOMAIN"
 SITE_TITLE="$DOMAIN"
 
 if ! sudo -u www-data -- wp --path="$WEB_ROOT" core is-installed --allow-root 2>/dev/null; then
