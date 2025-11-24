@@ -58,11 +58,10 @@ WP_DB_PASS=$(openssl rand -base64 18 | tr -d '\n' )
 # System packages & Ondrej PHP PPA for PHP 8.3
 # -------------------------
 apt-get update -y
-apt-get install -y software-properties-common ca-certificates lsb-release apt-transport-https curl gnupg2 wget zip unzip htop rsync
+apt-get install -y software-properties-common ca-certificates lsb-release apt-transport-https curl gnupg2
 
 # Add Ondrej PPA and install PHP 8.3 + extensions
 add-apt-repository -y ppa:ondrej/php
-add-apt-repository -y ppa:ondrej/nginx
 apt-get update -y
 
 apt-get install -y nginx mariadb-server \
@@ -270,9 +269,10 @@ perl -i -0777 -pe "s/database_name_here/$WP_DB/s; s/username_here/$WP_DB_USER/s;
 
 SALT=$(curl -s https://api.wordpress.org/secret-key/1.1/salt/)
 if [ -n "$SALT" ]; then
-  if ! perl -i -0777 -pe "s/define\('AUTH_KEY'.+?SECURE_AUTH_SALT'.+?\);/$SALT/s" "$WP_CONFIG"; then
-    printf "\n# WP salts\n%s\n" "$SALT" >> "$WP_CONFIG"
-  fi
+  # FIX: Export SALT and use $ENV{SALT} in perl to avoid regex injection errors
+  export SALT
+  # Regex updated to match from AUTH_KEY down to NONCE_SALT (the entire block)
+  perl -i -0777 -pe "s/define\('AUTH_KEY'.+?NONCE_SALT'.+?\);/\$ENV{SALT}/s" "$WP_CONFIG"
 fi
 
 cat >> "$WP_CONFIG" <<'WPSEC'
