@@ -4,36 +4,108 @@ set -euo pipefail
 # setup-swap.sh
 # Configure a 2 GB swapfile with persistence
 
-# Run as root on Ubuntu/Debian: sudo bash setup-swap.sh
+# -------------------------
+# Formatting & Logging Helper Functions
+# -------------------------
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+log_info() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+log_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
+
+log_warn() {
+    echo -e "${YELLOW}[WARN]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+# Error Handler Trap
+error_handler() {
+    local line_no=$1
+    log_error "Script failed at line $line_no."
+    exit 1
+}
+trap 'error_handler ${LINENO}' ERR
+
+# -------------------------
+# Root Check
+# -------------------------
 if [ "$(id -u)" -ne 0 ]; then
-  echo "Please run as root: sudo $0"
+  log_error "Please run as root: sudo $0"
   exit 1
 fi
 
-# Create a 2 GB swap file
-fallocate -l 2G /swapfile
+echo "-------------------------------------------------------"
+log_info "Starting Swap Configuration..."
+echo "-------------------------------------------------------"
 
-# Set permissions for the swap file
+# 1. Create a 2 GB swap file
+if [ -f /swapfile ]; then
+    log_warn "/swapfile already exists. Skipping creation."
+else
+    log_info "Creating 2 GB swap file..."
+    fallocate -l 2G /swapfile
+    log_success "File created."
+fi
+
+# 2. Set permissions for the swap file
+log_info "Setting permissions (600)..."
 chmod 600 /swapfile
 
-# Make it a swap area
-mkswap /swapfile
+# 3. Make it a swap area
+if ! file /swapfile | grep -q "swap file"; then
+    log_info "Formatting /swapfile as swap area..."
+    mkswap /swapfile
+else
+    log_info "/swapfile is already formatted."
+fi
 
-# Enable the swap
-swapon /swapfile
+# 4. Enable the swap
+if ! swapon --show | grep -q "/swapfile"; then
+    log_info "Enabling the swap..."
+    swapon /swapfile
+    log_success "Swap enabled."
+else
+    log_info "Swap is already active."
+fi
 
-# Make the swap persistent by adding an entry to /etc/fstab
-echo '/swapfile none swap sw 0 0' | tee -a /etc/fstab
+# 5. Make the swap persistent
+log_info "Configuring persistence in /etc/fstab..."
+if ! grep -q "^/swapfile" /etc/fstab; then
+    echo '/swapfile none swap sw 0 0' | tee -a /etc/fstab
+    log_success "Added fstab entry."
+else
+    log_info "fstab entry already exists."
+fi
 
 # Verify swap usage
+echo
+log_info "Current Swap Status:"
 swapon --show
+echo
 
-# Set swappiness parameter
+# 6. Tuning parameters
+log_info "Tuning kernel parameters..."
 sysctl vm.swappiness=10
-
-# Set vfs_cache_pressure parameter
 sysctl vm.vfs_cache_pressure=50
 
-# Add the parameters to /etc/sysctl.conf for persistence
-echo 'vm.swappiness=10' | tee -a /etc/sysctl.conf
-echo 'vm.vfs_cache_pressure=50' | tee -a /etc/sysctl.conf
+# 7. Persist tuning
+log_info "Updating /etc/sysctl.conf for persistence..."
+if ! grep -q "vm.swappiness=10" /etc/sysctl.conf; then
+    echo 'vm.swappiness=10' | tee -a /etc/sysctl.conf
+fi
+if ! grep -q "vm.vfs_cache_pressure=50" /etc/sysctl.conf; then
+    echo 'vm.vfs_cache_pressure=50' | tee -a /etc/sysctl.conf
+fi
+
+log_success "Swap setup complete!"
