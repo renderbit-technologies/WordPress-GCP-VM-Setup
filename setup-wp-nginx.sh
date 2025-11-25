@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # setup-wp-nginx.sh
-# Installs nginx + PHP 8.3 (Ondrej PPA) + MariaDB + WordPress with hardening and tuning
+# Installs nginx + PHP 8.3 (Ondrej PPA) + MariaDB + WordPress + phpMyAdmin with hardening
 
 # -------------------------
 # Formatting & Logging Helper Functions
@@ -49,7 +49,7 @@ fi
 # Interactive inputs
 # -------------------------
 echo "-------------------------------------------------------"
-log_info "Starting WordPress Nginx/PHP 8.3 Setup Wizard"
+log_info "Starting WP + phpMyAdmin + Nginx/PHP 8.3 Setup Wizard"
 echo "-------------------------------------------------------"
 
 read -rp "Domain to install WordPress for (example: example.com): " DOMAIN
@@ -82,6 +82,7 @@ WEB_ROOT="/var/www/$DOMAIN"
 NGINX_SITE="/etc/nginx/sites-available/$DOMAIN"
 TMPDIR=$(mktemp -d)
 CRED_FILE="$HOME/.wp-credentials"
+PMA_ROOT="/usr/share/phpmyadmin"
 
 export DEBIAN_FRONTEND=noninteractive
 
@@ -93,6 +94,7 @@ MYSQL_ROOT_PASS=$(openssl rand -base64 18 | tr -d '\n' )
 WP_ADMIN_USER="user"
 WP_ADMIN_PASS=$(openssl rand -base64 18 | tr -d '\n' )
 WP_DB_PASS=$(openssl rand -base64 18 | tr -d '\n' )
+PMA_BLOWFISH=$(openssl rand -base64 32 | tr -d '\n')
 
 # -------------------------
 # System packages & Ondrej PHP PPA for PHP 8.3
@@ -188,6 +190,35 @@ systemctl restart php8.3-fpm
 log_success "PHP 8.3 tuned and restarted."
 
 # -------------------------
+# Install phpMyAdmin
+# -------------------------
+log_info "Downloading and Installing phpMyAdmin to $PMA_ROOT ..."
+
+# Check if exists, remove to update/reinstall
+if [ -d "$PMA_ROOT" ]; then rm -rf "$PMA_ROOT"; fi
+
+cd "$TMPDIR"
+wget -q https://www.phpmyadmin.net/downloads/phpMyAdmin-latest-all-languages.zip -O pma.zip
+unzip -q pma.zip
+mv phpMyAdmin-*-all-languages "$PMA_ROOT"
+
+# Configure PMA
+cp "$PMA_ROOT/config.sample.inc.php" "$PMA_ROOT/config.inc.php"
+# Inject Blowfish Secret
+sed -i "s/\$cfg\['blowfish_secret'\] = '';/\$cfg\['blowfish_secret'\] = '$PMA_BLOWFISH';/" "$PMA_ROOT/config.inc.php"
+# Fix Permissions
+chown -R www-data:www-data "$PMA_ROOT"
+chmod 0755 "$PMA_ROOT"
+# Ensure config is not world writable
+chmod 640 "$PMA_ROOT/config.inc.php"
+
+# Create a temp directory for PMA to use
+mkdir -p "$PMA_ROOT/tmp"
+chmod 777 "$PMA_ROOT/tmp"
+
+log_success "phpMyAdmin installed."
+
+# -------------------------
 # nginx site & security headers
 # -------------------------
 log_info "Configuring Nginx server block for $DOMAIN..."
@@ -242,12 +273,33 @@ server {
         access_log off;
     }
 
-    # PHP via php8.3-fpm socket
+    # PHP via php8.3-fpm socket (MAIN)
     location ~ \.php$ {
         include snippets/fastcgi-php.conf;
         fastcgi_pass unix:$PHP_FPM_SOCK;
         fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
         include fastcgi_params;
+    }
+
+    # ----------------------------------------------------
+    # phpMyAdmin Location Block
+    # ----------------------------------------------------
+    location ^~ /phpmyadmin {
+        root /usr/share;
+        index index.php index.html index.htm;
+
+        location ~ ^/phpmyadmin/(.+\.php)$ {
+            try_files \$uri =404;
+            root /usr/share;
+            fastcgi_pass unix:$PHP_FPM_SOCK;
+            fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
+            include fastcgi_params;
+            include snippets/fastcgi-php.conf;
+        }
+
+        location ~* ^/phpmyadmin/(.+\.(jpg|jpeg|gif|css|png|js|ico|html|xml|txt))$ {
+            root /usr/share;
+        }
     }
 
     # Deny hidden files
@@ -510,6 +562,11 @@ systemctl reload nginx || true
   echo "  Password: $WP_ADMIN_PASS"
   echo "  Admin email: $LE_EMAIL"
   echo
+  echo "phpMyAdmin:"
+  echo "  URL: https://$DOMAIN/phpmyadmin"
+  echo "  Use the 'WordPress DB' credentials above to login."
+  echo "  Note: You cannot login as 'root' via PMA by default."
+  echo
   echo "PHP-FPM tuning (www pool):"
   echo "  cpu_cores = $CORES"
   echo "  pm.max_children = $MAX_CHILDREN"
@@ -532,7 +589,7 @@ chown root:root "$CRED_FILE"
 # -------------------------
 echo -e ""
 echo -e "=============================================================="
-echo -e "${GREEN}WordPress installation complete for: $DOMAIN${NC}"
+echo -e "${GREEN}WordPress + phpMyAdmin installation complete for: $DOMAIN${NC}"
 echo -e ""
 echo -e "Credentials saved to: ${YELLOW}$CRED_FILE${NC} (mode 600)"
 echo -e "-- Displaying generated credentials (also saved) --"
@@ -550,28 +607,13 @@ echo -e "  Username: $WP_ADMIN_USER"
 echo -e "  Password: $WP_ADMIN_PASS"
 echo -e "  Admin email: $LE_EMAIL"
 echo -e ""
-echo -e "${BLUE}PHP-FPM tuning (www pool):${NC}"
-echo -e "  cpu_cores = $CORES"
-echo -e "  pm.max_children = $MAX_CHILDREN"
-echo -e "  pm.start_servers = $START_SERVERS"
-echo -e "  pm.min_spare_servers = $MIN_SPARE_SERVERS"
-echo -e "  pm.max_spare_servers = $MAX_SPARE_SERVERS"
-echo -e "  pm.max_requests = $PM_MAX_REQUESTS"
+echo -e "${BLUE}phpMyAdmin:${NC}"
+echo -e "  URL: https://$DOMAIN/phpmyadmin"
 echo -e ""
 echo -e "Important notes:"
-echo -e " - Visit https://$DOMAIN to finish and log in. FORCE_SSL_ADMIN is enabled."
+echo -e " - Visit https://$DOMAIN to finish and log in."
+echo -e " - Visit https://$DOMAIN/phpmyadmin to manage the database."
 echo -e " - Ensure GCP VPC firewall allows ingress TCP 80 and 443 to this VM."
-echo -e " - If certbot failed, re-run:"
-echo -e "     sudo certbot --nginx -d $DOMAIN ${WWW_DOMAIN:+-d $WWW_DOMAIN} -m $LE_EMAIL --agree-tos --redirect --expand"
-echo -e " - Review PHP-FPM pool values for your instance class. Larger sites may need higher pm.max_children and more memory."
-echo -e " - For stricter security consider WAF (Cloud Armor or modsecurity), CDN, and backups."
-echo -e ""
-echo -e "To view credentials:"
-echo -e "  sudo cat $CRED_FILE"
-echo -e ""
-echo -e "To manually run WP updates:"
-echo -e "  sudo -u www-data -- wp --path=\"$WEB_ROOT\" core update --allow-root"
-echo -e "  sudo -u www-data -- wp --path=\"$WEB_ROOT\" plugin update --all --allow-root"
-echo -e "  sudo -u www-data -- wp --path=\"$WEB_ROOT\" theme update --all --allow-root"
+echo -e " - To view credentials again: sudo cat $CRED_FILE"
 echo -e ""
 echo -e "=============================================================="
