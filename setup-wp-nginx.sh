@@ -282,14 +282,14 @@ server {
     }
 
     # ----------------------------------------------------
-    # phpMyAdmin Location Block
+    # phpMyAdmin Location Block (FIXED)
     # ----------------------------------------------------
     location ^~ /phpmyadmin {
         root /usr/share;
         index index.php index.html index.htm;
 
         location ~ ^/phpmyadmin/(.+\.php)$ {
-            try_files \$uri =404;
+            # FIX: Removed 'try_files' here because snippets/fastcgi-php.conf already has it.
             root /usr/share;
             fastcgi_pass unix:$PHP_FPM_SOCK;
             fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
@@ -340,10 +340,15 @@ mysql -e "DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';" || true
 mysql -e "FLUSH PRIVILEGES;" || true
 
 # Set MySQL root password LAST (this cuts off passwordless socket access)
-mysql <<SQL || true
+# We only do this if we can still log in without a password
+if mysql -e "status" >/dev/null 2>&1; then
+    mysql <<SQL || true
 ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASS}';
 FLUSH PRIVILEGES;
 SQL
+else
+    log_info "MySQL root password likely already set. Skipping ALTER USER."
+fi
 
 log_success "Database configured successfully."
 
