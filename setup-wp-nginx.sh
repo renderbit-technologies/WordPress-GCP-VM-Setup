@@ -101,7 +101,7 @@ PMA_BLOWFISH=$(openssl rand -base64 32 | tr -d '\n')
 # -------------------------
 log_info "Updating system packages and repositories..."
 apt-get update -y
-apt-get install -y software-properties-common ca-certificates lsb-release apt-transport-https curl gnupg2 wget htop rsync zip unzip
+apt-get install -y software-properties-common ca-certificates lsb-release apt-transport-https curl gnupg2 wget htop rsync zip unzip python3
 
 log_info "Adding Ondrej PPA and installing PHP 8.3 + Extensions..."
 add-apt-repository -y ppa:ondrej/php
@@ -375,14 +375,45 @@ log_info "Generating wp-config.php and fetching Salts..."
 WP_CONFIG="$WEB_ROOT/wp-config.php"
 cp "$WEB_ROOT/wp-config-sample.php" "$WP_CONFIG"
 
+# Basic string replacements
 perl -i -0777 -pe "s/database_name_here/$WP_DB/s; s/username_here/$WP_DB_USER/s; s/password_here/$WP_DB_PASS/s;" "$WP_CONFIG"
 
+# -------------------------------------------------------------
+# FIX: Use Python for Salt replacement to handle special chars safely
+# -------------------------------------------------------------
 SALT=$(curl -s https://api.wordpress.org/secret-key/1.1/salt/)
 if [ -n "$SALT" ]; then
-  # FIX: Export SALT and use $ENV{SALT} in perl to avoid regex injection errors
-  export SALT
-  # Regex updated: Uses pipe | delimiter to avoid Salt collisions and \s* to handle WP coding standards
-  perl -i -0777 -pe "s|define\(\s*'AUTH_KEY'.+?NONCE_SALT'.+?\);|\$ENV{SALT}|s" "$WP_CONFIG"
+    export SALT
+    export WP_CONFIG
+    python3 -c "
+import os, re
+try:
+    salt_val = os.environ.get('SALT', '')
+    wp_conf = os.environ.get('WP_CONFIG', '')
+    if not wp_conf:
+        print('[ERROR] WP_CONFIG var not set')
+        exit(1)
+    
+    with open(wp_conf, 'r') as f:
+        content = f.read()
+    
+    # Regex matches the entire block from AUTH_KEY down to NONCE_SALT
+    pattern = re.compile(r\"define\(\s*'AUTH_KEY'.+?NONCE_SALT'\s*,\s*'.+?'\s*\);\", re.DOTALL)
+    
+    # If the regex doesn't match perfectly, we might need a looser match
+    # Trying a looser match that just looks for the first define to the last define in that block
+    if not pattern.search(content):
+       pattern = re.compile(r\"define\(\s*'AUTH_KEY'.+?NONCE_SALT'.+?\);\", re.DOTALL)
+       
+    new_content = pattern.sub(salt_val, content)
+    
+    with open(wp_conf, 'w') as f:
+        f.write(new_content)
+    print('[INFO] Salts updated successfully via Python.')
+except Exception as e:
+    print(f'[ERROR] Python Salt update failed: {e}')
+    exit(1)
+"
 fi
 
 cat >> "$WP_CONFIG" <<'WPSEC'
