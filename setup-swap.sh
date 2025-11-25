@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # setup-swap.sh
-# Configure a 2 GB swapfile with persistence
+# Configure a swapfile with persistence (User-defined size)
 
 # -------------------------
 # Formatting & Logging Helper Functions
@@ -49,12 +49,25 @@ echo "-------------------------------------------------------"
 log_info "Starting Swap Configuration..."
 echo "-------------------------------------------------------"
 
-# 1. Create a 2 GB swap file
+# Detect RAM and suggest swap size
+MEM_MB=$(free -m | awk '/^Mem:/ {print $2}')
+DEFAULT_SWAP="2G"
+
+# Simple logic: If RAM > 3.5GB, suggest 4G, else 2G
+if [ "$MEM_MB" -gt 3500 ]; then
+    DEFAULT_SWAP="4G"
+fi
+
+log_info "Detected System RAM: $(free -h | awk '/^Mem:/ {print $2}')"
+read -rp "Enter swap size (e.g. 1G, 2G, 4G) [${DEFAULT_SWAP}]: " SWAP_SIZE
+SWAP_SIZE=${SWAP_SIZE:-$DEFAULT_SWAP}
+
+# 1. Create swap file
 if [ -f /swapfile ]; then
     log_warn "/swapfile already exists. Skipping creation."
 else
-    log_info "Creating 2 GB swap file..."
-    fallocate -l 2G /swapfile
+    log_info "Creating ${SWAP_SIZE} swap file..."
+    fallocate -l "${SWAP_SIZE}" /swapfile
     log_success "File created."
 fi
 
