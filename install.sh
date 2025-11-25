@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Setup script for a new WordPress VM on GCP
+# curl -l https://gist.githubusercontent.com/soham2008xyz/bb3964121c42a87f3f99250edb93c1d9/raw/install.sh -o install.sh && sudo bash install.sh && sudo rm install.sh
+
 # Run as root on Ubuntu/Debian: sudo bash install.sh
 if [ "$(id -u)" -ne 0 ]; then
   echo "Please run as root: sudo $0"
@@ -33,8 +36,8 @@ echo "Step 2/2: Installing WordPress stack"
 echo "-----------------------------------------------------"
 bash ./setup-wp-nginx.sh
 
-# Cleanup (optional)
-# rm setup-swap.sh setup-wp-nginx.sh
+# Cleanup
+rm setup-swap.sh setup-wp-nginx.sh
 
 echo
 echo "-----------------------------------------------------"
