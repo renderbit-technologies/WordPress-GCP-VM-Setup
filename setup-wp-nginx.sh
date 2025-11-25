@@ -390,6 +390,25 @@ log_info "Enabling Plugin/Theme auto-updates..."
 sudo -u www-data -- wp --path="$WEB_ROOT" plugin auto-updates enable --all --allow-root || true
 sudo -u www-data -- wp --path="$WEB_ROOT" theme auto-updates enable --all --allow-root || true
 
+# -------------------------
+# Install Essential Plugins
+# -------------------------
+log_info "Installing Essential Plugins..."
+sudo -u www-data -- wp --path="$WEB_ROOT" plugin install \
+  jetpack \
+  akismet \
+  jetpack-protect \
+  jetpack-boost \
+  amp \
+  sucuri-scanner \
+  wordfence \
+  wp-mail-smtp \
+  cloudflare-flexible-ssl \
+  google-analytics-for-wordpress \
+  updraftplus \
+  better-search-replace \
+  --allow-root || true
+
 # Create weekly WP update cron (applies updates automatically)
 CRON_JOB="/etc/cron.weekly/wp-updates"
 cat > "$CRON_JOB" <<'CRON'
