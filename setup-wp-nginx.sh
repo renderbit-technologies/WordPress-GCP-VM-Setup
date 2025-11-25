@@ -193,7 +193,7 @@ log_success "PHP 8.3 tuned and restarted."
 log_info "Configuring Nginx server block for $DOMAIN..."
 mkdir -p "$WEB_ROOT"
 chown -R www-data:www-data "$WEB_ROOT"
-chmod -R 755 "$WEB_ROOT"
+chmod -R 0775 "$WEB_ROOT"
 
 SEC_SNIPPET="/etc/nginx/snippets/security-headers.conf"
 cat > "$SEC_SNIPPET" <<'NGSEC'
@@ -304,16 +304,12 @@ wget -q https://wordpress.org/latest.zip -O latest.zip
 unzip -q latest.zip
 rsync -a wordpress/ "$WEB_ROOT/"
 
-# Ownership & baseline perms
-log_info "Applying permission hardening..."
-chown -R root:www-data "$WEB_ROOT"
-find "$WEB_ROOT" -type d -exec chmod 755 {} \;
-find "$WEB_ROOT" -type f -exec chmod 640 {} \;
-
-# wp-content writable by www-data
-chown -R www-data:www-data "$WEB_ROOT/wp-content"
-find "$WEB_ROOT/wp-content" -type d -exec chmod 775 {} \;
-find "$WEB_ROOT/wp-content" -type f -exec chmod 664 {} \;
+# Ownership & Permissions Update
+# User requested: www-data:www-data, 0775 for dirs, 0664 for files
+log_info "Applying permission hardening (www-data:www-data, 0775/0664)..."
+chown -R www-data:www-data "$WEB_ROOT"
+find "$WEB_ROOT" -type d -exec chmod 0775 {} \;
+find "$WEB_ROOT" -type f -exec chmod 0664 {} \;
 
 # -------------------------
 # wp-config and salts, hardening constants
@@ -333,14 +329,20 @@ if [ -n "$SALT" ]; then
 fi
 
 cat >> "$WP_CONFIG" <<'WPSEC'
-/** Security & auto-update settings (added by installer) */
+/** SSL/Reverse Proxy Fix (added by installer) */
+if (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') {
+    $_SERVER['HTTPS'] = 'on';
+}
+
+/** Security & auto-update settings */
 define('DISALLOW_FILE_EDIT', true);
-define('WP_AUTO_UPDATE_CORE', true);
+define('WP_AUTO_UPDATE_CORE', 'minor'); // Updated to 'minor' per request
 if ( ! defined('FORCE_SSL_ADMIN') ) define('FORCE_SSL_ADMIN', true);
 WPSEC
 
 # Lock wp-config
-chown root:www-data "$WP_CONFIG"
+# We keep www-data ownership so WP can read it, but 640 prevents world-read
+chown www-data:www-data "$WP_CONFIG"
 chmod 640 "$WP_CONFIG"
 
 # Remove version files
@@ -455,17 +457,15 @@ fi
 # Final perms & cleanup
 # -------------------------
 log_info "Finalizing permissions and cleaning up..."
-# Ensure wp-config locked
-chmod 640 "$WP_CONFIG" || true
-chown root:www-data "$WP_CONFIG" || true
 
-# Ensure ownerships
-chown -R root:www-data "$WEB_ROOT"
-chown -R www-data:www-data "$WEB_ROOT/wp-content"
-find "$WEB_ROOT" -type d -exec chmod 755 {} \;
-find "$WEB_ROOT" -type f -exec chmod 640 {} \;
-find "$WEB_ROOT/wp-content" -type d -exec chmod 775 {} \;
-find "$WEB_ROOT/wp-content" -type f -exec chmod 664 {} \;
+# Ensure ownerships - User Requested: www-data:www-data, 0775 dirs, 0664 files
+chown -R www-data:www-data "$WEB_ROOT"
+find "$WEB_ROOT" -type d -exec chmod 0775 {} \;
+find "$WEB_ROOT" -type f -exec chmod 0664 {} \;
+
+# Re-lock wp-config (prevent world-read)
+chmod 640 "$WP_CONFIG" || true
+# Note: Owner is already www-data from recursive chown above, so web server can still read it.
 
 rm -rf "$TMPDIR"
 systemctl reload php8.3-fpm || true
