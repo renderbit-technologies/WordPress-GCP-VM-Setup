@@ -1,72 +1,48 @@
 # WordPress Deployment on GCP
 
 ## Overview
-This repository contains scripts and guidelines for deploying WordPress on Google Cloud Platform (GCP) using virtual machine instances. This setup allows for a scalable, reliable, and fast WordPress experience.
+This repository contains a set of shell scripts optimized for **Ubuntu 24.04 LTS** to deploy a high-performance WordPress stack on Google Cloud Platform (GCP).
 
-## Features
-- Easy setup with shell scripts
-- Customizable VM configurations
-- Reliable backup and recovery options
-- Support for HTTPS through managed SSL certificates
+The setup includes:
+- **Nginx** web server
+- **PHP 8.3** (via Ondrej PPA) with FPM and OPcache tuning
+- **MariaDB** database server
+- **WordPress** (latest) with WP-CLI
+- **phpMyAdmin** for database management
+- **Swap** memory configuration
+- **Fail2Ban** for SSH protection
+- **Certbot** for automatic HTTPS (Let's Encrypt)
+- Security hardening (permissions, headers, firewall)
 
 ## Prerequisites
-- A Google Cloud Platform account
-- Basic knowledge of GCP VM instances and networking
-- `gcloud` command-line tool installed and authenticated
-- A domain name (optional, but recommended for production)
+- A GCP VM instance running **Ubuntu 24.04 LTS**.
+- `bash` and `curl` installed on the server (usually present by default).
+- A valid domain name pointing to the VM's external IP address.
 
 ## Installation
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/renderbit-technologies/WordPress-GCP-VM-Setup.git
-   cd WordPress-GCP-VM-Setup
-   ```
-2. Ensure you have configured the `gcloud` CLI with your GCP project:
-   ```bash
-   gcloud init
-   ```
-3. Run the setup script:
-   ```bash
-   ./setup.sh
-   ```
+Connect to your GCP VM via SSH and run the following command to start the installation:
 
-## Configuration
-- Edit the `config.sh` file to customize your instance settings, such as:
-  - Machine type
-  - Zone
-  - Disk size
-  - WordPress settings
+```bash
+curl -l https://gist.githubusercontent.com/soham2008xyz/bb3964121c42a87f3f99250edb93c1d9/raw/install.sh -o install.sh && sudo bash install.sh && sudo rm install.sh
+```
 
-## Usage Instructions for Shell Scripts
-- **Setup Script**: `setup.sh`
-  - This script provisions the GCP VM instance and installs WordPress automatically.
-- **Backup Script**: `backup.sh`
-  - Use this script to take backups of your WordPress instance.
-- **Restore Script**: `restore.sh`
-  - This script helps in restoring your WordPress from a backup.
+The script will interactively ask for:
+1. Domain name
+2. Database name and user preferences
+3. Admin email for SSL notifications
+4. Fail2Ban configuration
 
-## Troubleshooting Guide
-- If the setup fails, check the GCP console for any VM errors.
-- Ensure that your billing account is active with GCP.
-- For shell script errors, check the logs generated in the `logs/` directory.
+## Features
+- **Automated Setup**: Installs and configures the entire stack without manual intervention.
+- **Performance Tuned**: Configures PHP-FPM and OPcache based on available system resources.
+- **Secure**: Implements security headers, file permission hardening, and Fail2Ban.
+- **Swap Management**: Automatically detects and configures swap space for stability.
+- **Tools Included**: Comes with WP-CLI and phpMyAdmin pre-installed.
 
-## Contribution Guidelines
-1. Fork the repository.
-2. Create a feature branch:
-   ```bash
-   git checkout -b feature/MyFeature
-   ```
-3. Commit your changes:
-   ```bash
-   git commit -m 'Add some feature'
-   ```
-4. Push to the branch:
-   ```bash
-   git push origin feature/MyFeature
-   ```
-5. Open a pull request.
-
-We're always looking for more contributors! Feel free to add new features, bug fixes, or improvements. Your help is greatly appreciated!
+## Troubleshooting
+- **Logs**: Error logs are directly shown on `stdout` during execution.
+- If the setup fails, check the console output for error messages.
+- Ensure your DNS records are correctly propagated before running the script (required for SSL generation).
 
 ## License
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
