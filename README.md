@@ -23,7 +23,7 @@ The setup includes:
 Connect to your GCP VM via SSH and run the following command to start the installation:
 
 ```bash
-curl -l https://gist.githubusercontent.com/soham2008xyz/bb3964121c42a87f3f99250edb93c1d9/raw/install.sh -o install.sh && sudo bash install.sh && sudo rm install.sh
+curl -fsSL https://raw.githubusercontent.com/renderbit-technologies/WordPress-GCP-VM-Setup/main/install.sh -o install.sh && sudo bash install.sh && sudo rm install.sh
 ```
 
 The script will interactively ask for:

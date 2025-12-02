@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Setup script for a new WordPress VM on GCP
-# curl -l https://gist.githubusercontent.com/soham2008xyz/bb3964121c42a87f3f99250edb93c1d9/raw/install.sh -o install.sh && sudo bash install.sh && sudo rm install.sh
+# curl -fsSL https://raw.githubusercontent.com/renderbit-technologies/WordPress-GCP-VM-Setup/main/install.sh -o install.sh && sudo bash install.sh && sudo rm install.sh
 
 # Run as root on Ubuntu/Debian: sudo bash install.sh
 if [ "$(id -u)" -ne 0 ]; then
@@ -11,7 +11,7 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 # Base Gist URL (without commit hash to ensure HEAD/latest version)
-BASE_URL="https://gist.githubusercontent.com/soham2008xyz/bb3964121c42a87f3f99250edb93c1d9/raw"
+BASE_URL="https://raw.githubusercontent.com/renderbit-technologies/WordPress-GCP-VM-Setup/main"
 
 echo "-----------------------------------------------------"
 echo "Fetching latest deployment scripts (HEAD revision)..."
