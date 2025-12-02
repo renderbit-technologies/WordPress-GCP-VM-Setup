@@ -6,8 +6,8 @@ set -euo pipefail
 
 # Run as root on Ubuntu/Debian: sudo bash install.sh
 if [ "$(id -u)" -ne 0 ]; then
-  echo "Please run as root: sudo $0"
-  exit 1
+	echo "Please run as root: sudo $0"
+	exit 1
 fi
 
 # Base Gist URL (without commit hash to ensure HEAD/latest version)

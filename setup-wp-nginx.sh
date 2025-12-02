@@ -14,26 +14,26 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
+	echo -e "${BLUE}[INFO]${NC} $1"
 }
 
 log_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
+	echo -e "${GREEN}[SUCCESS]${NC} $1"
 }
 
 log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
+	echo -e "${YELLOW}[WARN]${NC} $1"
 }
 
 log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
+	echo -e "${RED}[ERROR]${NC} $1"
 }
 
 # Error Handler Trap
 error_handler() {
-    local line_no=$1
-    log_error "Script failed at line $line_no."
-    exit 1
+	local line_no=$1
+	log_error "Script failed at line $line_no."
+	exit 1
 }
 trap 'error_handler ${LINENO}' ERR
 
@@ -41,8 +41,8 @@ trap 'error_handler ${LINENO}' ERR
 # Root Check
 # -------------------------
 if [ "$(id -u)" -ne 0 ]; then
-  log_error "Please run as root: sudo $0"
-  exit 1
+	log_error "Please run as root: sudo $0"
+	exit 1
 fi
 
 # -------------------------
@@ -69,8 +69,8 @@ log_warn "Make sure the DNS A record for $DOMAIN points to this VM's external IP
 read -rp "Continue? (y/n) [y]: " CONT
 CONT=${CONT:-y}
 if [[ ! "$CONT" =~ ^[Yy]$ ]]; then
-  log_warn "Aborted by user."
-  exit 0
+	log_warn "Aborted by user."
+	exit 0
 fi
 
 # -------------------------
@@ -90,10 +90,10 @@ export DEBIAN_FRONTEND=noninteractive
 # Generate credentials
 # -------------------------
 log_info "Generating secure passwords..."
-MYSQL_ROOT_PASS=$(openssl rand -base64 18 | tr -d '\n' )
+MYSQL_ROOT_PASS=$(openssl rand -base64 18 | tr -d '\n')
 WP_ADMIN_USER="user"
-WP_ADMIN_PASS=$(openssl rand -base64 18 | tr -d '\n' )
-WP_DB_PASS=$(openssl rand -base64 18 | tr -d '\n' )
+WP_ADMIN_PASS=$(openssl rand -base64 18 | tr -d '\n')
+WP_DB_PASS=$(openssl rand -base64 18 | tr -d '\n')
 PMA_BLOWFISH=$(openssl rand -base64 32 | tr -d '\n')
 
 # -------------------------
@@ -109,8 +109,8 @@ add-apt-repository -y ppa:ondrej/nginx
 apt-get update -y
 
 apt-get install -y nginx mariadb-server \
-  php8.3 php8.3-fpm php8.3-cli php8.3-mysql php8.3-curl \
-  php8.3-gd php8.3-mbstring php8.3-xml php8.3-zip php8.3-intl php8.3-opcache php8.3-imagick
+	php8.3 php8.3-fpm php8.3-cli php8.3-mysql php8.3-curl \
+	php8.3-gd php8.3-mbstring php8.3-xml php8.3-zip php8.3-intl php8.3-opcache php8.3-imagick
 
 log_info "Enabling services..."
 systemctl enable --now nginx
@@ -122,20 +122,20 @@ systemctl enable --now php8.3-fpm
 log_info "Tuning PHP-FPM configuration..."
 PHP_FPM_SOCK="/run/php/php8.3-fpm.sock"
 if [ ! -S "$PHP_FPM_SOCK" ]; then
-  log_error "php8.3-fpm socket not found at $PHP_FPM_SOCK"
-  log_info "Check php8.3-fpm status: systemctl status php8.3-fpm"
-  exit 1
+	log_error "php8.3-fpm socket not found at $PHP_FPM_SOCK"
+	log_info "Check php8.3-fpm status: systemctl status php8.3-fpm"
+	exit 1
 fi
 
 # Determine CPU cores and set pool sizing
 CORES=$(nproc)
 # formulas (conservative default): max_children = cores * 5 (min 5), start = cores * 2
-MAX_CHILDREN=$(( CORES * 5 ))
+MAX_CHILDREN=$((CORES * 5))
 if [ "$MAX_CHILDREN" -lt 5 ]; then MAX_CHILDREN=5; fi
-START_SERVERS=$(( CORES * 2 ))
+START_SERVERS=$((CORES * 2))
 if [ "$START_SERVERS" -lt 2 ]; then START_SERVERS=2; fi
 MIN_SPARE_SERVERS=$CORES
-MAX_SPARE_SERVERS=$(( CORES * 3 ))
+MAX_SPARE_SERVERS=$((CORES * 3))
 PM_MAX_REQUESTS=500
 
 log_info "Pool Sizing: Cores=$CORES | Max Children=$MAX_CHILDREN"
@@ -143,35 +143,35 @@ log_info "Pool Sizing: Cores=$CORES | Max Children=$MAX_CHILDREN"
 # Update FPM pool config
 FPM_POOL_CONF="/etc/php/8.3/fpm/pool.d/www.conf"
 if [ -f "$FPM_POOL_CONF" ]; then
-  sed -i "s/^pm = .*/pm = dynamic/" "$FPM_POOL_CONF" || true
-  sed -i "s/^pm.max_children = .*/pm.max_children = ${MAX_CHILDREN}/" "$FPM_POOL_CONF" || true
-  # If settings not present, append
-  grep -q "^pm.max_children" "$FPM_POOL_CONF" || echo "pm.max_children = ${MAX_CHILDREN}" >> "$FPM_POOL_CONF"
-  grep -q "^pm.start_servers" "$FPM_POOL_CONF" || echo "pm.start_servers = ${START_SERVERS}" >> "$FPM_POOL_CONF"
-  grep -q "^pm.min_spare_servers" "$FPM_POOL_CONF" || echo "pm.min_spare_servers = ${MIN_SPARE_SERVERS}" >> "$FPM_POOL_CONF"
-  grep -q "^pm.max_spare_servers" "$FPM_POOL_CONF" || echo "pm.max_spare_servers = ${MAX_SPARE_SERVERS}" >> "$FPM_POOL_CONF"
-  grep -q "^pm.max_requests" "$FPM_POOL_CONF" || echo "pm.max_requests = ${PM_MAX_REQUESTS}" >> "$FPM_POOL_CONF"
-  # Ensure listen.owner/group are www-data
-  sed -i "s/^listen.owner = .*/listen.owner = www-data/" "$FPM_POOL_CONF" || true
-  sed -i "s/^listen.group = .*/listen.group = www-data/" "$FPM_POOL_CONF" || true
+	sed -i "s/^pm = .*/pm = dynamic/" "$FPM_POOL_CONF" || true
+	sed -i "s/^pm.max_children = .*/pm.max_children = ${MAX_CHILDREN}/" "$FPM_POOL_CONF" || true
+	# If settings not present, append
+	grep -q "^pm.max_children" "$FPM_POOL_CONF" || echo "pm.max_children = ${MAX_CHILDREN}" >>"$FPM_POOL_CONF"
+	grep -q "^pm.start_servers" "$FPM_POOL_CONF" || echo "pm.start_servers = ${START_SERVERS}" >>"$FPM_POOL_CONF"
+	grep -q "^pm.min_spare_servers" "$FPM_POOL_CONF" || echo "pm.min_spare_servers = ${MIN_SPARE_SERVERS}" >>"$FPM_POOL_CONF"
+	grep -q "^pm.max_spare_servers" "$FPM_POOL_CONF" || echo "pm.max_spare_servers = ${MAX_SPARE_SERVERS}" >>"$FPM_POOL_CONF"
+	grep -q "^pm.max_requests" "$FPM_POOL_CONF" || echo "pm.max_requests = ${PM_MAX_REQUESTS}" >>"$FPM_POOL_CONF"
+	# Ensure listen.owner/group are www-data
+	sed -i "s/^listen.owner = .*/listen.owner = www-data/" "$FPM_POOL_CONF" || true
+	sed -i "s/^listen.group = .*/listen.group = www-data/" "$FPM_POOL_CONF" || true
 fi
 
 # Tune php.ini (FPM)
 PHP_FPM_INI="/etc/php/8.3/fpm/php.ini"
 if [ -f "$PHP_FPM_INI" ]; then
-  # sensible values for WordPress
-  sed -i "s/^memory_limit = .*/memory_limit = 256M/" "$PHP_FPM_INI" || true
-  sed -i "s/^upload_max_filesize = .*/upload_max_filesize = 64M/" "$PHP_FPM_INI" || true
-  sed -i "s/^post_max_size = .*/post_max_size = 64M/" "$PHP_FPM_INI" || true
-  sed -i "s/^max_execution_time = .*/max_execution_time = 300/" "$PHP_FPM_INI" || true
-  sed -i "s/^;?realpath_cache_size = .*/realpath_cache_size = 4096k/" "$PHP_FPM_INI" || true
-  sed -i "s/^;?realpath_cache_ttl = .*/realpath_cache_ttl = 600/" "$PHP_FPM_INI" || true
+	# sensible values for WordPress
+	sed -i "s/^memory_limit = .*/memory_limit = 256M/" "$PHP_FPM_INI" || true
+	sed -i "s/^upload_max_filesize = .*/upload_max_filesize = 64M/" "$PHP_FPM_INI" || true
+	sed -i "s/^post_max_size = .*/post_max_size = 64M/" "$PHP_FPM_INI" || true
+	sed -i "s/^max_execution_time = .*/max_execution_time = 300/" "$PHP_FPM_INI" || true
+	sed -i "s/^;?realpath_cache_size = .*/realpath_cache_size = 4096k/" "$PHP_FPM_INI" || true
+	sed -i "s/^;?realpath_cache_ttl = .*/realpath_cache_ttl = 600/" "$PHP_FPM_INI" || true
 fi
 
 # Configure OPcache for performance
 log_info "Configuring OPcache..."
 OPCACHE_CONF="/etc/php/8.3/mods-available/opcache.ini"
-cat > "$OPCACHE_CONF" <<'OPC'
+cat >"$OPCACHE_CONF" <<'OPC'
 ; Enable OPcache
 opcache.enable=1
 opcache.enable_cli=0
@@ -227,7 +227,7 @@ chown -R www-data:www-data "$WEB_ROOT"
 chmod -R 0775 "$WEB_ROOT"
 
 SEC_SNIPPET="/etc/nginx/snippets/security-headers.conf"
-cat > "$SEC_SNIPPET" <<'NGSEC'
+cat >"$SEC_SNIPPET" <<'NGSEC'
 add_header X-Frame-Options "SAMEORIGIN" always;
 add_header X-Content-Type-Options "nosniff" always;
 add_header Referrer-Policy "no-referrer-when-downgrade" always;
@@ -237,7 +237,7 @@ add_header Content-Security-Policy "default-src 'self' 'unsafe-inline' 'unsafe-e
 NGSEC
 
 # Create nginx server block (HTTP). certbot will handle HTTPS redirect.
-cat > "$NGINX_SITE" <<NGINX
+cat >"$NGINX_SITE" <<NGINX
 server {
     listen 80;
     listen [::]:80;
@@ -321,7 +321,7 @@ NGINX
 ln -sf "$NGINX_SITE" /etc/nginx/sites-enabled/$DOMAIN
 # Remove default site if present
 if [ -f /etc/nginx/sites-enabled/default ]; then
-  rm -f /etc/nginx/sites-enabled/default
+	rm -f /etc/nginx/sites-enabled/default
 fi
 
 nginx -t
@@ -349,12 +349,12 @@ mysql -e "FLUSH PRIVILEGES;" || true
 # Set MySQL root password LAST (this cuts off passwordless socket access)
 # We only do this if we can still log in without a password
 if mysql -e "status" >/dev/null 2>&1; then
-    mysql <<SQL || true
+	mysql <<SQL || true
 ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASS}';
 FLUSH PRIVILEGES;
 SQL
 else
-    log_info "MySQL root password likely already set. Skipping ALTER USER."
+	log_info "MySQL root password likely already set. Skipping ALTER USER."
 fi
 
 log_success "Database configured successfully."
@@ -390,9 +390,9 @@ perl -i -0777 -pe "s/database_name_here/$WP_DB/s; s/username_here/$WP_DB_USER/s;
 # -------------------------------------------------------------
 SALT=$(curl -s https://api.wordpress.org/secret-key/1.1/salt/)
 if [ -n "$SALT" ]; then
-    export SALT
-    export WP_CONFIG
-    python3 -c "
+	export SALT
+	export WP_CONFIG
+	python3 -c "
 import os, re
 try:
     salt_val = os.environ.get('SALT', '')
@@ -423,7 +423,7 @@ except Exception as e:
 "
 fi
 
-cat >> "$WP_CONFIG" <<'WPSEC'
+cat >>"$WP_CONFIG" <<'WPSEC'
 /** SSL/Reverse Proxy Fix (added by installer) */
 if (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') {
     $_SERVER['HTTPS'] = 'on';
@@ -447,9 +447,9 @@ rm -f "$WEB_ROOT/readme.html" "$WEB_ROOT/license.txt" || true
 # WP-CLI install + WordPress core install
 # -------------------------
 if ! command -v wp >/dev/null 2>&1; then
-  log_info "Installing WP-CLI..."
-  curl -sSL https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar -o /usr/local/bin/wp
-  chmod +x /usr/local/bin/wp
+	log_info "Installing WP-CLI..."
+	curl -sSL https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar -o /usr/local/bin/wp
+	chmod +x /usr/local/bin/wp
 fi
 
 # Install WP (non-interactive). Use HTTP initially (Certbot will enable HTTPS).
@@ -457,24 +457,24 @@ SITE_URL="http://$DOMAIN"
 SITE_TITLE="$DOMAIN"
 
 if ! sudo -u www-data -- wp --path="$WEB_ROOT" core is-installed --allow-root 2>/dev/null; then
-  log_info "Running WP-CLI Core Install..."
-  sudo -u www-data -- wp --path="$WEB_ROOT" core install \
-    --url="$SITE_URL" \
-    --title="$SITE_TITLE" \
-    --admin_user="$WP_ADMIN_USER" \
-    --admin_password="$WP_ADMIN_PASS" \
-    --admin_email="$LE_EMAIL" \
-    --skip-email \
-    --allow-root
-  log_success "WordPress Core Installed."
+	log_info "Running WP-CLI Core Install..."
+	sudo -u www-data -- wp --path="$WEB_ROOT" core install \
+		--url="$SITE_URL" \
+		--title="$SITE_TITLE" \
+		--admin_user="$WP_ADMIN_USER" \
+		--admin_password="$WP_ADMIN_PASS" \
+		--admin_email="$LE_EMAIL" \
+		--skip-email \
+		--allow-root
+	log_success "WordPress Core Installed."
 else
-  log_info "WordPress already installed. Skipping core install."
+	log_info "WordPress already installed. Skipping core install."
 fi
 
 # If 'admin' exists, reassign posts to 'user' and delete admin
 if sudo -u www-data -- wp --path="$WEB_ROOT" user get admin --field=ID --allow-root >/dev/null 2>&1; then
-  log_info "Removing default 'admin' user..."
-  sudo -u www-data -- wp --path="$WEB_ROOT" user delete admin --reassign="$WP_ADMIN_USER" --allow-root || true
+	log_info "Removing default 'admin' user..."
+	sudo -u www-data -- wp --path="$WEB_ROOT" user delete admin --reassign="$WP_ADMIN_USER" --allow-root || true
 fi
 
 # Ensure 'user' has administrator role
@@ -490,23 +490,23 @@ sudo -u www-data -- wp --path="$WEB_ROOT" theme auto-updates enable --all --allo
 # -------------------------
 log_info "Installing Essential Plugins..."
 sudo -u www-data -- wp --path="$WEB_ROOT" plugin install \
-  jetpack \
-  akismet \
-  jetpack-protect \
-  jetpack-boost \
-  amp \
-  sucuri-scanner \
-  wordfence \
-  wp-mail-smtp \
-  cloudflare-flexible-ssl \
-  google-analytics-for-wordpress \
-  updraftplus \
-  better-search-replace \
-  --allow-root || true
+	jetpack \
+	akismet \
+	jetpack-protect \
+	jetpack-boost \
+	amp \
+	sucuri-scanner \
+	wordfence \
+	wp-mail-smtp \
+	cloudflare-flexible-ssl \
+	google-analytics-for-wordpress \
+	updraftplus \
+	better-search-replace \
+	--allow-root || true
 
 # Create weekly WP update cron (applies updates automatically)
 CRON_JOB="/etc/cron.weekly/wp-updates"
-cat > "$CRON_JOB" <<'CRON'
+cat >"$CRON_JOB" <<'CRON'
 #!/usr/bin/env bash
 WP_PATH=PLACEHOLDER_DOCROOT
 sudo -u www-data -- wp --path="$WP_PATH" core update --minor --allow-root || true
@@ -530,7 +530,7 @@ if [ -n "$WWW_DOMAIN" ]; then CERT_DOMAINS+=("-d" "$WWW_DOMAIN"); fi
 
 log_info "Requesting SSL Certificate. If this fails, check your DNS records!"
 certbot --nginx "${CERT_DOMAINS[@]}" --email "$LE_EMAIL" --agree-tos --no-eff-email --redirect --expand --non-interactive || {
-  log_error "Certbot reported issues. You may need to run it manually."
+	log_error "Certbot reported issues. You may need to run it manually."
 }
 
 # Ensure certbot renewal service/timer is enabled
@@ -548,10 +548,10 @@ dpkg-reconfigure -f noninteractive unattended-upgrades || true
 # Fail2ban (optional)
 # -------------------------
 if [[ "$ENABLE_FAIL2BAN" =~ ^[Yy] ]]; then
-  log_info "Installing and configuring Fail2Ban..."
-  apt-get install -y fail2ban
-  systemctl enable --now fail2ban
-  cat > /etc/fail2ban/jail.local <<'JAIL'
+	log_info "Installing and configuring Fail2Ban..."
+	apt-get install -y fail2ban
+	systemctl enable --now fail2ban
+	cat >/etc/fail2ban/jail.local <<'JAIL'
 [DEFAULT]
 bantime = 1h
 findtime = 15m
@@ -563,8 +563,8 @@ enabled = true
 port = ssh
 logpath = %(sshd_log)s
 JAIL
-  systemctl restart fail2ban
-  log_success "Fail2Ban active."
+	systemctl restart fail2ban
+	log_success "Fail2Ban active."
 fi
 
 # -------------------------
@@ -589,40 +589,40 @@ systemctl reload nginx || true
 # Save credentials to secure file
 # -------------------------
 {
-  echo "----- WordPress & DB Credentials for $DOMAIN -----"
-  echo "Generated at: $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-  echo
-  echo "MySQL root password:"
-  echo "$MYSQL_ROOT_PASS"
-  echo
-  echo "WordPress DB:"
-  echo "  DB name: $WP_DB"
-  echo "  DB user: $WP_DB_USER"
-  echo "  DB password: $WP_DB_PASS"
-  echo
-  echo "WordPress admin (new) account:"
-  echo "  Username: $WP_ADMIN_USER"
-  echo "  Password: $WP_ADMIN_PASS"
-  echo "  Admin email: $LE_EMAIL"
-  echo
-  echo "phpMyAdmin:"
-  echo "  URL: https://$DOMAIN/phpmyadmin"
-  echo "  Use the 'WordPress DB' credentials above to login."
-  echo "  Note: You cannot login as 'root' via PMA by default."
-  echo
-  echo "PHP-FPM tuning (www pool):"
-  echo "  cpu_cores = $CORES"
-  echo "  pm.max_children = $MAX_CHILDREN"
-  echo "  pm.start_servers = $START_SERVERS"
-  echo "  pm.min_spare_servers = $MIN_SPARE_SERVERS"
-  echo "  pm.max_spare_servers = $MAX_SPARE_SERVERS"
-  echo "  pm.max_requests = $PM_MAX_REQUESTS"
-  echo
-  echo "Notes:"
-  echo " - Webroot: $WEB_ROOT"
-  echo " - WP weekly update cron: $CRON_JOB"
-  echo " - Certbot (apt) used to request TLS"
-} > "$CRED_FILE"
+	echo "----- WordPress & DB Credentials for $DOMAIN -----"
+	echo "Generated at: $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+	echo
+	echo "MySQL root password:"
+	echo "$MYSQL_ROOT_PASS"
+	echo
+	echo "WordPress DB:"
+	echo "  DB name: $WP_DB"
+	echo "  DB user: $WP_DB_USER"
+	echo "  DB password: $WP_DB_PASS"
+	echo
+	echo "WordPress admin (new) account:"
+	echo "  Username: $WP_ADMIN_USER"
+	echo "  Password: $WP_ADMIN_PASS"
+	echo "  Admin email: $LE_EMAIL"
+	echo
+	echo "phpMyAdmin:"
+	echo "  URL: https://$DOMAIN/phpmyadmin"
+	echo "  Use the 'WordPress DB' credentials above to login."
+	echo "  Note: You cannot login as 'root' via PMA by default."
+	echo
+	echo "PHP-FPM tuning (www pool):"
+	echo "  cpu_cores = $CORES"
+	echo "  pm.max_children = $MAX_CHILDREN"
+	echo "  pm.start_servers = $START_SERVERS"
+	echo "  pm.min_spare_servers = $MIN_SPARE_SERVERS"
+	echo "  pm.max_spare_servers = $MAX_SPARE_SERVERS"
+	echo "  pm.max_requests = $PM_MAX_REQUESTS"
+	echo
+	echo "Notes:"
+	echo " - Webroot: $WEB_ROOT"
+	echo " - WP weekly update cron: $CRON_JOB"
+	echo " - Certbot (apt) used to request TLS"
+} >"$CRED_FILE"
 
 chmod 600 "$CRED_FILE"
 chown root:root "$CRED_FILE"
