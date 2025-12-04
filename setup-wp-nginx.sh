@@ -360,91 +360,7 @@ fi
 log_success "Database configured successfully."
 
 # -------------------------
-# Download WordPress and set permissions
-# -------------------------
-log_info "Downloading and installing WordPress Core..."
-cd "$TMPDIR"
-wget -q https://wordpress.org/latest.zip -O latest.zip
-unzip -q latest.zip
-rsync -a wordpress/ "$WEB_ROOT/"
-
-# Ownership & Permissions Update
-# User requested: www-data:www-data, 0775 for dirs, 0664 for files
-log_info "Applying permission hardening (www-data:www-data, 0775/0664)..."
-chown -R www-data:www-data "$WEB_ROOT"
-find "$WEB_ROOT" -type d -exec chmod 0775 {} \;
-find "$WEB_ROOT" -type f -exec chmod 0664 {} \;
-
-# -------------------------
-# wp-config and salts, hardening constants
-# -------------------------
-log_info "Generating wp-config.php and fetching Salts..."
-WP_CONFIG="$WEB_ROOT/wp-config.php"
-cp "$WEB_ROOT/wp-config-sample.php" "$WP_CONFIG"
-
-# Basic string replacements
-perl -i -0777 -pe "s/database_name_here/$WP_DB/s; s/username_here/$WP_DB_USER/s; s/password_here/$WP_DB_PASS/s;" "$WP_CONFIG"
-
-# -------------------------------------------------------------
-# FIX: Use Python for Salt replacement to handle special chars safely
-# -------------------------------------------------------------
-SALT=$(curl -s https://api.wordpress.org/secret-key/1.1/salt/)
-if [ -n "$SALT" ]; then
-	export SALT
-	export WP_CONFIG
-	python3 -c "
-import os, re
-try:
-    salt_val = os.environ.get('SALT', '')
-    wp_conf = os.environ.get('WP_CONFIG', '')
-    if not wp_conf:
-        print('[ERROR] WP_CONFIG var not set')
-        exit(1)
-    
-    with open(wp_conf, 'r') as f:
-        content = f.read()
-    
-    # Regex matches the entire block from AUTH_KEY down to NONCE_SALT
-    pattern = re.compile(r\"define\(\s*'AUTH_KEY'.+?NONCE_SALT'\s*,\s*'.+?'\s*\);\", re.DOTALL)
-    
-    # If the regex doesn't match perfectly, we might need a looser match
-    # Trying a looser match that just looks for the first define to the last define in that block
-    if not pattern.search(content):
-       pattern = re.compile(r\"define\(\s*'AUTH_KEY'.+?NONCE_SALT'.+?\);\", re.DOTALL)
-       
-    new_content = pattern.sub(salt_val, content)
-    
-    with open(wp_conf, 'w') as f:
-        f.write(new_content)
-    print('[INFO] Salts updated successfully via Python.')
-except Exception as e:
-    print(f'[ERROR] Python Salt update failed: {e}')
-    exit(1)
-"
-fi
-
-cat >>"$WP_CONFIG" <<'WPSEC'
-/** SSL/Reverse Proxy Fix (added by installer) */
-if (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') {
-    $_SERVER['HTTPS'] = 'on';
-}
-
-/** Security & auto-update settings */
-define('DISALLOW_FILE_EDIT', true);
-define('WP_AUTO_UPDATE_CORE', 'minor'); // Updated to 'minor' per request
-if ( ! defined('FORCE_SSL_ADMIN') ) define('FORCE_SSL_ADMIN', true);
-WPSEC
-
-# Lock wp-config
-# We keep www-data ownership so WP can read it, but 640 prevents world-read
-chown www-data:www-data "$WP_CONFIG"
-chmod 640 "$WP_CONFIG"
-
-# Remove version files
-rm -f "$WEB_ROOT/readme.html" "$WEB_ROOT/license.txt" || true
-
-# -------------------------
-# WP-CLI install + WordPress core install
+# Install WP-CLI (Moved up)
 # -------------------------
 if ! command -v wp >/dev/null 2>&1; then
 	log_info "Installing WP-CLI..."
@@ -452,6 +368,75 @@ if ! command -v wp >/dev/null 2>&1; then
 	chmod +x /usr/local/bin/wp
 fi
 
+# -------------------------
+# Download WordPress via WP-CLI
+# -------------------------
+log_info "Downloading WordPress Core via WP-CLI..."
+mkdir -p "$WEB_ROOT"
+# Ensure permissions so www-data can write
+chown -R www-data:www-data "$WEB_ROOT"
+chmod -R 0775 "$WEB_ROOT"
+
+# Download Core
+if ! sudo -u www-data -- wp --path="$WEB_ROOT" core is-installed --allow-root 2>/dev/null; then
+    sudo -u www-data -- wp --path="$WEB_ROOT" core download --skip-content --force || true
+    # Note: --skip-content avoids overwriting default themes/plugins if re-running
+    # --force ensures it downloads even if folder exists
+fi
+
+# -------------------------
+# Generate wp-config.php via WP-CLI
+# -------------------------
+WP_CONFIG="$WEB_ROOT/wp-config.php"
+
+if [ ! -f "$WP_CONFIG" ]; then
+    log_info "Generating wp-config.php via WP-CLI..."
+    sudo -u www-data -- wp --path="$WEB_ROOT" config create \
+        --dbname="$WP_DB" \
+        --dbuser="$WP_DB_USER" \
+        --dbpass="$WP_DB_PASS" \
+        --locale="en_US" \
+        --force
+else
+    log_info "wp-config.php already exists. Skipping generation."
+fi
+
+# -------------------------
+# Inject Security/SSL settings
+# -------------------------
+log_info "Injecting Security Hardening into wp-config.php..."
+
+# Use sed to insert constants BEFORE the 'require_once' line so they take effect.
+# This avoids the "Strange wp-config.php" error by ensuring wp-settings.php is loaded last.
+sed -i "/require_once ABSPATH . 'wp-settings.php';/i \\
+\\
+/** SSL/Reverse Proxy Fix (added by installer) */\\
+if (isset(\$_SERVER['HTTP_X_FORWARDED_PROTO']) && \$_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') {\\
+    \$_SERVER['HTTPS'] = 'on';\\
+}\\
+\\
+/** Security & auto-update settings */\\
+define('DISALLOW_FILE_EDIT', true);\\
+define('WP_AUTO_UPDATE_CORE', 'minor'); // Updated to 'minor' per request\\
+if ( ! defined('FORCE_SSL_ADMIN') ) define('FORCE_SSL_ADMIN', true);" "$WP_CONFIG"
+
+# Lock wp-config (prevent world-read)
+chmod 640 "$WP_CONFIG"
+
+# Remove version files
+rm -f "$WEB_ROOT/readme.html" "$WEB_ROOT/license.txt" || true
+
+# -------------------------
+# Ownership & Permissions Update
+# -------------------------
+log_info "Applying permission hardening (www-data:www-data, 0775/0664)..."
+chown -R www-data:www-data "$WEB_ROOT"
+find "$WEB_ROOT" -type d -exec chmod 0775 {} \;
+find "$WEB_ROOT" -type f -exec chmod 0664 {} \;
+
+# -------------------------
+# WordPress core install
+# -------------------------
 # Install WP (non-interactive). Use HTTP initially (Certbot will enable HTTPS).
 SITE_URL="http://$DOMAIN"
 SITE_TITLE="$DOMAIN"
