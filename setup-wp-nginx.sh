@@ -205,7 +205,7 @@ mv phpMyAdmin-*-all-languages "$PMA_ROOT"
 # Configure PMA
 cp "$PMA_ROOT/config.sample.inc.php" "$PMA_ROOT/config.inc.php"
 # Inject Blowfish Secret
-sed -i "s/\$cfg\['blowfish_secret'\] = '';/\$cfg\['blowfish_secret'\] = '$PMA_BLOWFISH';/" "$PMA_ROOT/config.inc.php"
+sed -i "s|\$cfg\['blowfish_secret'\] = '';|\$cfg\['blowfish_secret'\] = '$PMA_BLOWFISH';|" "$PMA_ROOT/config.inc.php"
 # Fix Permissions
 chown -R www-data:www-data "$PMA_ROOT"
 chmod 0755 "$PMA_ROOT"
