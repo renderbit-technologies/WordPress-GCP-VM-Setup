@@ -233,7 +233,7 @@ add_header X-Content-Type-Options "nosniff" always;
 add_header Referrer-Policy "no-referrer-when-downgrade" always;
 add_header X-XSS-Protection "1; mode=block" always;
 # CSP fix: Added 'blob:' for workers and 'http:' for local dev compatibility
-add_header Content-Security-Policy "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https: http:;" always;
+add_header Content-Security-Policy "upgrade-insecure-requests; default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https: http:;" always;
 NGSEC
 
 # Create nginx server block (HTTP). certbot will handle HTTPS redirect.
