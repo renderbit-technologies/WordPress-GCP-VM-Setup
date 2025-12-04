@@ -87,14 +87,40 @@ PMA_ROOT="/usr/share/phpmyadmin"
 export DEBIAN_FRONTEND=noninteractive
 
 # -------------------------
+# Helper Function for MySQL Execution
+# -------------------------
+mysql_exec() {
+	if mysql -e "$1" >/dev/null 2>&1; then
+		return 0
+	else
+		# Try with password if set
+		if [ -n "${MYSQL_ROOT_PASS:-}" ]; then
+			mysql -u root -p"$MYSQL_ROOT_PASS" -e "$1"
+		else
+			# Failed and no password to try
+			return 1
+		fi
+	fi
+}
+
+# -------------------------
 # Generate credentials
 # -------------------------
 log_info "Generating secure passwords..."
-MYSQL_ROOT_PASS=$(openssl rand -base64 18 | tr -d '\n')
 WP_ADMIN_USER="user"
-WP_ADMIN_PASS=$(openssl rand -base64 18 | tr -d '\n')
-WP_DB_PASS=$(openssl rand -base64 18 | tr -d '\n')
 PMA_BLOWFISH=$(openssl rand -base64 32 | tr -d '\n')
+
+if [ -f "$CRED_FILE" ]; then
+	log_info "Found existing credentials file at $CRED_FILE. Using existing credentials."
+	# Extract credentials using awk
+	MYSQL_ROOT_PASS=$(awk '/MySQL root password:/{getline; print}' "$CRED_FILE")
+	WP_DB_PASS=$(awk '/DB password:/{print $3}' "$CRED_FILE")
+	WP_ADMIN_PASS=$(awk '/Password:/{if ($1=="Password:") print $2}' "$CRED_FILE")
+else
+	MYSQL_ROOT_PASS=$(openssl rand -base64 18 | tr -d '\n')
+	WP_ADMIN_PASS=$(openssl rand -base64 18 | tr -d '\n')
+	WP_DB_PASS=$(openssl rand -base64 18 | tr -d '\n')
+fi
 
 # -------------------------
 # System packages & Ondrej PHP PPA for PHP 8.3
@@ -233,7 +259,7 @@ add_header X-Content-Type-Options "nosniff" always;
 add_header Referrer-Policy "no-referrer-when-downgrade" always;
 add_header X-XSS-Protection "1; mode=block" always;
 # CSP fix: Added 'blob:' for workers and 'http:' for local dev compatibility
-add_header Content-Security-Policy "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https: http:;" always;
+add_header Content-Security-Policy "upgrade-insecure-requests; default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https: http:;" always;
 NGSEC
 
 # Create nginx server block (HTTP). certbot will handle HTTPS redirect.
@@ -334,17 +360,19 @@ log_success "Nginx configured."
 log_info "Creating Database and User..."
 
 # FIX: Create the WordPress database and user FIRST while we still have passwordless root access.
-mysql -e "CREATE DATABASE IF NOT EXISTS \`${WP_DB}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
-mysql -e "CREATE USER IF NOT EXISTS '${WP_DB_USER}'@'localhost' IDENTIFIED BY '${WP_DB_PASS}';"
-mysql -e "GRANT ALL PRIVILEGES ON \`${WP_DB}\`.* TO '${WP_DB_USER}'@'localhost';"
-mysql -e "FLUSH PRIVILEGES;"
+mysql_exec "CREATE DATABASE IF NOT EXISTS \`${WP_DB}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+mysql_exec "CREATE USER IF NOT EXISTS '${WP_DB_USER}'@'localhost' IDENTIFIED BY '${WP_DB_PASS}';"
+# Ensure the user has the correct password (in case it existed with a different one)
+mysql_exec "ALTER USER '${WP_DB_USER}'@'localhost' IDENTIFIED BY '${WP_DB_PASS}';"
+mysql_exec "GRANT ALL PRIVILEGES ON \`${WP_DB}\`.* TO '${WP_DB_USER}'@'localhost';"
+mysql_exec "FLUSH PRIVILEGES;"
 
 log_info "Hardening MariaDB Root account and removing test data..."
 # Extra: ensure no anonymous users and no test DB
-mysql -e "DELETE FROM mysql.user WHERE User='';" || true
-mysql -e "DROP DATABASE IF EXISTS test;" || true
-mysql -e "DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';" || true
-mysql -e "FLUSH PRIVILEGES;" || true
+mysql_exec "DELETE FROM mysql.user WHERE User='';" || true
+mysql_exec "DROP DATABASE IF EXISTS test;" || true
+mysql_exec "DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';" || true
+mysql_exec "FLUSH PRIVILEGES;" || true
 
 # Set MySQL root password LAST (this cuts off passwordless socket access)
 # We only do this if we can still log in without a password
