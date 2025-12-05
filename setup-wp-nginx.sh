@@ -87,14 +87,40 @@ PMA_ROOT="/usr/share/phpmyadmin"
 export DEBIAN_FRONTEND=noninteractive
 
 # -------------------------
+# Helper Function for MySQL Execution
+# -------------------------
+mysql_exec() {
+	if mysql -e "$1" >/dev/null 2>&1; then
+		return 0
+	else
+		# Try with password if set
+		if [ -n "${MYSQL_ROOT_PASS:-}" ]; then
+			mysql -u root -p"$MYSQL_ROOT_PASS" -e "$1"
+		else
+			# Failed and no password to try
+			return 1
+		fi
+	fi
+}
+
+# -------------------------
 # Generate credentials
 # -------------------------
 log_info "Generating secure passwords..."
-MYSQL_ROOT_PASS=$(openssl rand -base64 18 | tr -d '\n')
 WP_ADMIN_USER="user"
-WP_ADMIN_PASS=$(openssl rand -base64 18 | tr -d '\n')
-WP_DB_PASS=$(openssl rand -base64 18 | tr -d '\n')
 PMA_BLOWFISH=$(openssl rand -base64 32 | tr -d '\n')
+
+if [ -f "$CRED_FILE" ]; then
+	log_info "Found existing credentials file at $CRED_FILE. Using existing credentials."
+	# Extract credentials using awk
+	MYSQL_ROOT_PASS=$(awk '/MySQL root password:/{getline; print}' "$CRED_FILE")
+	WP_DB_PASS=$(awk '/DB password:/{print $3}' "$CRED_FILE")
+	WP_ADMIN_PASS=$(awk '/Password:/{if ($1=="Password:") print $2}' "$CRED_FILE")
+else
+	MYSQL_ROOT_PASS=$(openssl rand -base64 18 | tr -d '\n')
+	WP_ADMIN_PASS=$(openssl rand -base64 18 | tr -d '\n')
+	WP_DB_PASS=$(openssl rand -base64 18 | tr -d '\n')
+fi
 
 # -------------------------
 # System packages & Ondrej PHP PPA for PHP 8.3
@@ -205,7 +231,7 @@ mv phpMyAdmin-*-all-languages "$PMA_ROOT"
 # Configure PMA
 cp "$PMA_ROOT/config.sample.inc.php" "$PMA_ROOT/config.inc.php"
 # Inject Blowfish Secret
-sed -i "s/\$cfg\['blowfish_secret'\] = '';/\$cfg\['blowfish_secret'\] = '$PMA_BLOWFISH';/" "$PMA_ROOT/config.inc.php"
+sed -i "s|\$cfg\['blowfish_secret'\] = '';|\$cfg\['blowfish_secret'\] = '$PMA_BLOWFISH';|" "$PMA_ROOT/config.inc.php"
 # Fix Permissions
 chown -R www-data:www-data "$PMA_ROOT"
 chmod 0755 "$PMA_ROOT"
@@ -233,7 +259,7 @@ add_header X-Content-Type-Options "nosniff" always;
 add_header Referrer-Policy "no-referrer-when-downgrade" always;
 add_header X-XSS-Protection "1; mode=block" always;
 # CSP fix: Added 'blob:' for workers and 'http:' for local dev compatibility
-add_header Content-Security-Policy "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https: http:;" always;
+add_header Content-Security-Policy "upgrade-insecure-requests; default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https: http:;" always;
 NGSEC
 
 # Create nginx server block (HTTP). certbot will handle HTTPS redirect.
@@ -334,17 +360,19 @@ log_success "Nginx configured."
 log_info "Creating Database and User..."
 
 # FIX: Create the WordPress database and user FIRST while we still have passwordless root access.
-mysql -e "CREATE DATABASE IF NOT EXISTS \`${WP_DB}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
-mysql -e "CREATE USER IF NOT EXISTS '${WP_DB_USER}'@'localhost' IDENTIFIED BY '${WP_DB_PASS}';"
-mysql -e "GRANT ALL PRIVILEGES ON \`${WP_DB}\`.* TO '${WP_DB_USER}'@'localhost';"
-mysql -e "FLUSH PRIVILEGES;"
+mysql_exec "CREATE DATABASE IF NOT EXISTS \`${WP_DB}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+mysql_exec "CREATE USER IF NOT EXISTS '${WP_DB_USER}'@'localhost' IDENTIFIED BY '${WP_DB_PASS}';"
+# Ensure the user has the correct password (in case it existed with a different one)
+mysql_exec "ALTER USER '${WP_DB_USER}'@'localhost' IDENTIFIED BY '${WP_DB_PASS}';"
+mysql_exec "GRANT ALL PRIVILEGES ON \`${WP_DB}\`.* TO '${WP_DB_USER}'@'localhost';"
+mysql_exec "FLUSH PRIVILEGES;"
 
 log_info "Hardening MariaDB Root account and removing test data..."
 # Extra: ensure no anonymous users and no test DB
-mysql -e "DELETE FROM mysql.user WHERE User='';" || true
-mysql -e "DROP DATABASE IF EXISTS test;" || true
-mysql -e "DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';" || true
-mysql -e "FLUSH PRIVILEGES;" || true
+mysql_exec "DELETE FROM mysql.user WHERE User='';" || true
+mysql_exec "DROP DATABASE IF EXISTS test;" || true
+mysql_exec "DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';" || true
+mysql_exec "FLUSH PRIVILEGES;" || true
 
 # Set MySQL root password LAST (this cuts off passwordless socket access)
 # We only do this if we can still log in without a password
@@ -360,91 +388,7 @@ fi
 log_success "Database configured successfully."
 
 # -------------------------
-# Download WordPress and set permissions
-# -------------------------
-log_info "Downloading and installing WordPress Core..."
-cd "$TMPDIR"
-wget -q https://wordpress.org/latest.zip -O latest.zip
-unzip -q latest.zip
-rsync -a wordpress/ "$WEB_ROOT/"
-
-# Ownership & Permissions Update
-# User requested: www-data:www-data, 0775 for dirs, 0664 for files
-log_info "Applying permission hardening (www-data:www-data, 0775/0664)..."
-chown -R www-data:www-data "$WEB_ROOT"
-find "$WEB_ROOT" -type d -exec chmod 0775 {} \;
-find "$WEB_ROOT" -type f -exec chmod 0664 {} \;
-
-# -------------------------
-# wp-config and salts, hardening constants
-# -------------------------
-log_info "Generating wp-config.php and fetching Salts..."
-WP_CONFIG="$WEB_ROOT/wp-config.php"
-cp "$WEB_ROOT/wp-config-sample.php" "$WP_CONFIG"
-
-# Basic string replacements
-perl -i -0777 -pe "s/database_name_here/$WP_DB/s; s/username_here/$WP_DB_USER/s; s/password_here/$WP_DB_PASS/s;" "$WP_CONFIG"
-
-# -------------------------------------------------------------
-# FIX: Use Python for Salt replacement to handle special chars safely
-# -------------------------------------------------------------
-SALT=$(curl -s https://api.wordpress.org/secret-key/1.1/salt/)
-if [ -n "$SALT" ]; then
-	export SALT
-	export WP_CONFIG
-	python3 -c "
-import os, re
-try:
-    salt_val = os.environ.get('SALT', '')
-    wp_conf = os.environ.get('WP_CONFIG', '')
-    if not wp_conf:
-        print('[ERROR] WP_CONFIG var not set')
-        exit(1)
-    
-    with open(wp_conf, 'r') as f:
-        content = f.read()
-    
-    # Regex matches the entire block from AUTH_KEY down to NONCE_SALT
-    pattern = re.compile(r\"define\(\s*'AUTH_KEY'.+?NONCE_SALT'\s*,\s*'.+?'\s*\);\", re.DOTALL)
-    
-    # If the regex doesn't match perfectly, we might need a looser match
-    # Trying a looser match that just looks for the first define to the last define in that block
-    if not pattern.search(content):
-       pattern = re.compile(r\"define\(\s*'AUTH_KEY'.+?NONCE_SALT'.+?\);\", re.DOTALL)
-       
-    new_content = pattern.sub(salt_val, content)
-    
-    with open(wp_conf, 'w') as f:
-        f.write(new_content)
-    print('[INFO] Salts updated successfully via Python.')
-except Exception as e:
-    print(f'[ERROR] Python Salt update failed: {e}')
-    exit(1)
-"
-fi
-
-cat >>"$WP_CONFIG" <<'WPSEC'
-/** SSL/Reverse Proxy Fix (added by installer) */
-if (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') {
-    $_SERVER['HTTPS'] = 'on';
-}
-
-/** Security & auto-update settings */
-define('DISALLOW_FILE_EDIT', true);
-define('WP_AUTO_UPDATE_CORE', 'minor'); // Updated to 'minor' per request
-if ( ! defined('FORCE_SSL_ADMIN') ) define('FORCE_SSL_ADMIN', true);
-WPSEC
-
-# Lock wp-config
-# We keep www-data ownership so WP can read it, but 640 prevents world-read
-chown www-data:www-data "$WP_CONFIG"
-chmod 640 "$WP_CONFIG"
-
-# Remove version files
-rm -f "$WEB_ROOT/readme.html" "$WEB_ROOT/license.txt" || true
-
-# -------------------------
-# WP-CLI install + WordPress core install
+# Install WP-CLI (Moved up)
 # -------------------------
 if ! command -v wp >/dev/null 2>&1; then
 	log_info "Installing WP-CLI..."
@@ -452,6 +396,75 @@ if ! command -v wp >/dev/null 2>&1; then
 	chmod +x /usr/local/bin/wp
 fi
 
+# -------------------------
+# Download WordPress via WP-CLI
+# -------------------------
+log_info "Downloading WordPress Core via WP-CLI..."
+mkdir -p "$WEB_ROOT"
+# Ensure permissions so www-data can write
+chown -R www-data:www-data "$WEB_ROOT"
+chmod -R 0775 "$WEB_ROOT"
+
+# Download Core
+if ! sudo -u www-data -- wp --path="$WEB_ROOT" core is-installed --allow-root 2>/dev/null; then
+    sudo -u www-data -- wp --path="$WEB_ROOT" core download --skip-content --force || true
+    # Note: --skip-content avoids overwriting default themes/plugins if re-running
+    # --force ensures it downloads even if folder exists
+fi
+
+# -------------------------
+# Generate wp-config.php via WP-CLI
+# -------------------------
+WP_CONFIG="$WEB_ROOT/wp-config.php"
+
+if [ ! -f "$WP_CONFIG" ]; then
+    log_info "Generating wp-config.php via WP-CLI..."
+    sudo -u www-data -- wp --path="$WEB_ROOT" config create \
+        --dbname="$WP_DB" \
+        --dbuser="$WP_DB_USER" \
+        --dbpass="$WP_DB_PASS" \
+        --locale="en_US" \
+        --force
+else
+    log_info "wp-config.php already exists. Skipping generation."
+fi
+
+# -------------------------
+# Inject Security/SSL settings
+# -------------------------
+log_info "Injecting Security Hardening into wp-config.php..."
+
+# Use sed to insert constants BEFORE the 'require_once' line so they take effect.
+# This avoids the "Strange wp-config.php" error by ensuring wp-settings.php is loaded last.
+sed -i "/require_once ABSPATH . 'wp-settings.php';/i \\
+\\
+/** SSL/Reverse Proxy Fix (added by installer) */\\
+if (isset(\$_SERVER['HTTP_X_FORWARDED_PROTO']) && \$_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') {\\
+    \$_SERVER['HTTPS'] = 'on';\\
+}\\
+\\
+/** Security & auto-update settings */\\
+define('DISALLOW_FILE_EDIT', true);\\
+define('WP_AUTO_UPDATE_CORE', 'minor'); // Updated to 'minor' per request\\
+if ( ! defined('FORCE_SSL_ADMIN') ) define('FORCE_SSL_ADMIN', true);" "$WP_CONFIG"
+
+# Lock wp-config (prevent world-read)
+chmod 640 "$WP_CONFIG"
+
+# Remove version files
+rm -f "$WEB_ROOT/readme.html" "$WEB_ROOT/license.txt" || true
+
+# -------------------------
+# Ownership & Permissions Update
+# -------------------------
+log_info "Applying permission hardening (www-data:www-data, 0775/0664)..."
+chown -R www-data:www-data "$WEB_ROOT"
+find "$WEB_ROOT" -type d -exec chmod 0775 {} \;
+find "$WEB_ROOT" -type f -exec chmod 0664 {} \;
+
+# -------------------------
+# WordPress core install
+# -------------------------
 # Install WP (non-interactive). Use HTTP initially (Certbot will enable HTTPS).
 SITE_URL="http://$DOMAIN"
 SITE_TITLE="$DOMAIN"
