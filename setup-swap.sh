@@ -3,6 +3,10 @@ set -euo pipefail
 
 # setup-swap.sh
 # Configure a swapfile with persistence (User-defined size)
+#
+# Supported Environment Variables:
+#   SWAP_SIZE         (Optional) Size of the swap file (e.g., 1G, 2G, 4G).
+#                     Defaults to 2G (or 4G if RAM > 3.5GB).
 
 # -------------------------
 # Formatting & Logging Helper Functions

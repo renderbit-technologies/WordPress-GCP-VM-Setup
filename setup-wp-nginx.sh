@@ -3,6 +3,15 @@ set -euo pipefail
 
 # setup-wp-nginx.sh
 # Installs nginx + PHP 8.3 (Ondrej PPA) + MariaDB + WordPress + phpMyAdmin with hardening
+#
+# Supported Environment Variables:
+#   DOMAIN            (Required) Domain to install WordPress for (e.g., example.com)
+#   USE_WWW           (Optional) Enable www alias? (y/n) [default: y]
+#   WP_DB             (Optional) Database name [default: wpdb]
+#   WP_DB_USER        (Optional) Database user [default: wpuser]
+#   LE_EMAIL          (Optional) Admin email [default: admin@$DOMAIN]
+#   ENABLE_FAIL2BAN   (Optional) Enable fail2ban? (y/n) [default: y]
+#   CONT              (Optional) Skip confirmation prompt? (y) [default: y in batch mode]
 
 # -------------------------
 # Formatting & Logging Helper Functions
