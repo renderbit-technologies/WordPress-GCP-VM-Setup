@@ -3,6 +3,15 @@ set -euo pipefail
 
 # setup-wp-nginx.sh
 # Installs nginx + PHP 8.3 (Ondrej PPA) + MariaDB + WordPress + phpMyAdmin with hardening
+#
+# Supported Environment Variables:
+#   DOMAIN            (Required) Domain to install WordPress for (e.g., example.com)
+#   USE_WWW           (Optional) Enable www alias? (y/n) [default: y]
+#   WP_DB             (Optional) Database name [default: wpdb]
+#   WP_DB_USER        (Optional) Database user [default: wpuser]
+#   LE_EMAIL          (Optional) Admin email [default: admin@$DOMAIN]
+#   ENABLE_FAIL2BAN   (Optional) Enable fail2ban? (y/n) [default: y]
+#   CONT              (Optional) Skip confirmation prompt? (y) [default: y in batch mode]
 
 # -------------------------
 # Formatting & Logging Helper Functions
@@ -52,22 +61,47 @@ echo "-------------------------------------------------------"
 log_info "Starting WP + phpMyAdmin + Nginx/PHP 8.3 Setup Wizard"
 echo "-------------------------------------------------------"
 
-read -rp "Domain to install WordPress for (example: example.com): " DOMAIN
-read -rp "Enable www.$DOMAIN as alias? (y/n) [y]: " USE_WWW
-USE_WWW=${USE_WWW:-y}
-read -rp "MariaDB WordPress DB name [wpdb]: " WP_DB
-WP_DB=${WP_DB:-wpdb}
-read -rp "MariaDB WordPress DB user [wpuser]: " WP_DB_USER
-WP_DB_USER=${WP_DB_USER:-wpuser}
-read -rp "Admin email for Let's Encrypt & WP notices [admin@$DOMAIN]: " LE_EMAIL
-LE_EMAIL=${LE_EMAIL:-admin@$DOMAIN}
-read -rp "Enable fail2ban (SSH jail) (y/n) [y]: " ENABLE_FAIL2BAN
-ENABLE_FAIL2BAN=${ENABLE_FAIL2BAN:-y}
+# Check if any configuration environment variables are set
+if [ -n "${DOMAIN:-}" ] || [ -n "${USE_WWW:-}" ] || [ -n "${WP_DB:-}" ] || [ -n "${WP_DB_USER:-}" ] || [ -n "${LE_EMAIL:-}" ] || [ -n "${ENABLE_FAIL2BAN:-}" ]; then
+	# Partial or full non-interactive mode
+	# DOMAIN is required. If not set, prompt.
+	if [ -z "${DOMAIN:-}" ]; then
+		read -rp "Domain to install WordPress for (example: example.com): " DOMAIN
+	fi
 
-echo
-log_warn "Make sure the DNS A record for $DOMAIN points to this VM's external IP."
-read -rp "Continue? (y/n) [y]: " CONT
-CONT=${CONT:-y}
+	# Others have defaults or use provided env vars
+	USE_WWW=${USE_WWW:-y}
+	WP_DB=${WP_DB:-wpdb}
+	WP_DB_USER=${WP_DB_USER:-wpuser}
+	LE_EMAIL=${LE_EMAIL:-admin@$DOMAIN}
+	ENABLE_FAIL2BAN=${ENABLE_FAIL2BAN:-y}
+
+	# Skip confirmation in this mode, assuming user intent
+	CONT=${CONT:-y}
+
+	echo
+	log_warn "Make sure the DNS A record for $DOMAIN points to this VM's external IP."
+
+else
+	# Fully interactive mode
+	read -rp "Domain to install WordPress for (example: example.com): " DOMAIN
+	read -rp "Enable www.$DOMAIN as alias? (y/n) [y]: " USE_WWW
+	USE_WWW=${USE_WWW:-y}
+	read -rp "MariaDB WordPress DB name [wpdb]: " WP_DB
+	WP_DB=${WP_DB:-wpdb}
+	read -rp "MariaDB WordPress DB user [wpuser]: " WP_DB_USER
+	WP_DB_USER=${WP_DB_USER:-wpuser}
+	read -rp "Admin email for Let's Encrypt & WP notices [admin@$DOMAIN]: " LE_EMAIL
+	LE_EMAIL=${LE_EMAIL:-admin@$DOMAIN}
+	read -rp "Enable fail2ban (SSH jail) (y/n) [y]: " ENABLE_FAIL2BAN
+	ENABLE_FAIL2BAN=${ENABLE_FAIL2BAN:-y}
+
+	echo
+	log_warn "Make sure the DNS A record for $DOMAIN points to this VM's external IP."
+	read -rp "Continue? (y/n) [y]: " CONT
+	CONT=${CONT:-y}
+fi
+
 if [[ ! "$CONT" =~ ^[Yy]$ ]]; then
 	log_warn "Aborted by user."
 	exit 0
