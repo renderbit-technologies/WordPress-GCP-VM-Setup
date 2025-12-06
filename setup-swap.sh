@@ -59,7 +59,9 @@ if [ "$MEM_MB" -gt 3500 ]; then
 fi
 
 log_info "Detected System RAM: $(free -h | awk '/^Mem:/ {print $2}')"
-read -rp "Enter swap size (e.g. 1G, 2G, 4G) [${DEFAULT_SWAP}]: " SWAP_SIZE
+if [ -z "${SWAP_SIZE:-}" ]; then
+	read -rp "Enter swap size (e.g. 1G, 2G, 4G) [${DEFAULT_SWAP}]: " SWAP_SIZE
+fi
 SWAP_SIZE=${SWAP_SIZE:-$DEFAULT_SWAP}
 
 # 1. Create swap file
