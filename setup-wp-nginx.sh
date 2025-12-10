@@ -482,6 +482,38 @@ define('DISALLOW_FILE_EDIT', true);\\
 define('WP_AUTO_UPDATE_CORE', 'minor'); // Updated to 'minor' per request\\
 if ( ! defined('FORCE_SSL_ADMIN') ) define('FORCE_SSL_ADMIN', true);" "$WP_CONFIG"
 
+# -------------------------
+# Create MU-plugin for XML-RPC mitigation
+# -------------------------
+log_info "Creating MU-plugin to disable XML-RPC pingback..."
+MU_PLUGINS_DIR="$WEB_ROOT/wp-content/mu-plugins"
+mkdir -p "$MU_PLUGINS_DIR"
+cat >"$MU_PLUGINS_DIR/disable-xmlrpc-pingback.php" <<'PHP'
+<?php
+/**
+ * Plugin Name: Disable XML-RPC Pingback
+ * Description: Disable pingback.ping xmlrpc method to prevent WordPress from participating in DDoS attacks.
+ * More info at: https://docs.bitnami.com/general/apps/wordpress/troubleshooting/xmlrpc-and-pingback/
+ */
+
+if ( ! defined( 'WP_CLI' ) ) {
+    // remove x-pingback HTTP header
+    add_filter( "wp_headers", function( $headers ) {
+        if ( isset( $headers['X-Pingback'] ) ) {
+            unset( $headers['X-Pingback'] );
+        }
+        return $headers;
+    });
+    // disable pingbacks
+    add_filter( "xmlrpc_methods", function( $methods ) {
+        if ( isset( $methods['pingback.ping'] ) ) {
+            unset( $methods['pingback.ping'] );
+        }
+        return $methods;
+    });
+}
+PHP
+
 # Lock wp-config (prevent world-read)
 chmod 640 "$WP_CONFIG"
 
