@@ -378,7 +378,7 @@ server {
 }
 NGINX
 
-ln -sf "$NGINX_SITE" /etc/nginx/sites-enabled/$DOMAIN
+ln -sf "$NGINX_SITE" /etc/nginx/sites-enabled/"$DOMAIN"
 # Remove default site if present
 if [ -f /etc/nginx/sites-enabled/default ]; then
 	rm -f /etc/nginx/sites-enabled/default
