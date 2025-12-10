@@ -478,6 +478,7 @@ if (isset(\$_SERVER['HTTP_X_FORWARDED_PROTO']) && \$_SERVER['HTTP_X_FORWARDED_PR
 }\\
 \\
 /** Security & auto-update settings */\\
+define('FS_METHOD', 'direct');\\
 define('DISALLOW_FILE_EDIT', true);\\
 define('WP_AUTO_UPDATE_CORE', 'minor'); // Updated to 'minor' per request\\
 if ( ! defined('FORCE_SSL_ADMIN') ) define('FORCE_SSL_ADMIN', true);" "$WP_CONFIG"
