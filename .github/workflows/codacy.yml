@@ -54,6 +54,26 @@ jobs:
           # This will handover control about PR rejection to the GitHub side
           max-allowed-issues: 2147483647
 
+      # Merge separate runs in the SARIF file into a single run to satisfy CodeQL upload requirements
+      - name: Merge SARIF runs
+        run: |
+          jq '{
+            "$schema": .["$schema"],
+            "version": .version,
+            "runs": [
+              {
+                "tool": {
+                  "driver": {
+                    "name": "Codacy Analysis CLI",
+                    "rules": ([.runs[].tool.driver.rules // []] | flatten)
+                  }
+                },
+                "results": ([.runs[].results // []] | flatten)
+              }
+            ]
+          }' results.sarif > merged-results.sarif
+          mv merged-results.sarif results.sarif
+
       # Upload the SARIF file generated in the previous step
       - name: Upload SARIF results file
         uses: github/codeql-action/upload-sarif@v4
