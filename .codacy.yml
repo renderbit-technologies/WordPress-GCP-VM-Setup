@@ -1,0 +1,30 @@
+engines:
+  trivy:
+    enabled: true
+    patterns:
+      - VULN_OS
+      - VULN_DEP
+      - VULN_APP
+      - CVE
+    severities:
+      - HIGH
+      - CRITICAL
+    config:
+      allow-unfixed: false
+
+  gosec:
+    enabled: false
+
+  codeql:
+    enabled: false
+
+exclude_paths:
+  - .github/**
+  - docs/**
+  - vendor/**
+  - node_modules/**
+  - .git/**
+
+analysis:
+  languages:
+    - Shell
