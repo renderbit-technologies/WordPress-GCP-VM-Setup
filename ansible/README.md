@@ -41,3 +41,36 @@ This Ansible playbook maps these tasks to roles:
     ```bash
     ansible-playbook -i inventory.yml playbook.yml
     ```
+
+## Testing with Vagrant
+
+This directory includes a `Vagrantfile` to easily test the playbook in a local VM.
+
+### Prerequisites
+-   Vagrant
+-   VirtualBox
+
+### Setup
+1.  Navigate to the `ansible` directory:
+    ```bash
+    cd ansible
+    ```
+2.  Start the Vagrant VM:
+    ```bash
+    vagrant up
+    ```
+    This will automatically provision the VM using Ansible (installing Ansible on the guest OS if needed).
+
+3.  Access the WordPress site:
+    -   Open `http://192.168.56.10.nip.io` in your browser.
+    -   Or configure your `/etc/hosts` to map `example.com` to `192.168.56.10`.
+
+4.  Reprovision (if you make changes):
+    ```bash
+    vagrant provision
+    ```
+
+5.  Destroy the VM:
+    ```bash
+    vagrant destroy
+    ```

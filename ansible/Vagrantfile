@@ -1,0 +1,33 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.configure("2") do |config|
+  # Use Ubuntu 24.04 LTS (Noble Numbat)
+  config.vm.box = "ubuntu/noble64"
+
+  # Configure a private network for easy access
+  config.vm.network "private_network", ip: "192.168.56.10"
+
+  # Configure CPU and Memory (WordPress + MariaDB can be heavy)
+  config.vm.provider "virtualbox" do |vb|
+    vb.memory = "2048"
+    vb.cpus = 2
+  end
+
+  # Ansible Provisioner - runs locally on the guest
+  config.vm.provision "ansible_local" do |ansible|
+    ansible.playbook = "playbook.yml"
+    ansible.install = true # Install Ansible on the guest
+    ansible.limit = "all"
+    ansible.verbose = "v"
+
+    # Pass extra vars if needed
+    ansible.extra_vars = {
+      domain: "192.168.56.10.nip.io", # Use nip.io for DNS resolution
+      use_www: false,
+      wp_db_pass: "vagrant",
+      wp_admin_pass: "vagrant",
+      admin_email: "admin@vagrant.local"
+    }
+  end
+end
