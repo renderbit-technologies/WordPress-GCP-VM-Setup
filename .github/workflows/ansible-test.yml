@@ -28,7 +28,8 @@ jobs:
       - name: Install VirtualBox
         run: |
           sudo apt-get update
-          sudo apt-get install -y virtualbox virtualbox-ext-pack
+          # Removing virtualbox-ext-pack as it requires interactive license acceptance
+          sudo apt-get install -y virtualbox
 
       - name: Install Vagrant
         run: |
