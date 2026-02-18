@@ -14,22 +14,28 @@ on:
 
 jobs:
   vagrant-test:
-    runs-on: macos-12
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: Enable KVM
         run: |
-          brew update
-          brew install --cask virtualbox
-          brew install vagrant
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Install VirtualBox and Vagrant
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y virtualbox vagrant
           vagrant --version
           VBoxManage --version
 
-      - name: Install Ansible Galaxy Collections (Host)
+      - name: Install Ansible
         run: |
-          brew install ansible
+          sudo apt-get install -y ansible
+          ansible --version
           ansible-galaxy collection install community.mysql
 
       - name: Syntax Check
@@ -40,12 +46,13 @@ jobs:
       - name: Run Vagrant Up
         run: |
           cd ansible
+          # GitHub Actions runners might not support hardware virtualization for VirtualBox well.
+          # But we try.
           vagrant up --provider=virtualbox
 
       - name: Verify Deployment (Internal)
         run: |
           cd ansible
-          # Check if Nginx is listening on port 80 inside the VM
           vagrant ssh -c "curl -I http://localhost"
 
       - name: Idempotency Check
