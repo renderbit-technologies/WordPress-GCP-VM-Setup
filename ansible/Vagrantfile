@@ -3,7 +3,8 @@
 
 Vagrant.configure("2") do |config|
   # Use Ubuntu 24.04 LTS (Noble Numbat)
-  config.vm.box = "ubuntu/noble64"
+  # Using bento/ubuntu-24.04 as it is reliable and widely available
+  config.vm.box = "bento/ubuntu-24.04"
 
   # Configure a private network for easy access
   config.vm.network "private_network", ip: "192.168.56.10"
