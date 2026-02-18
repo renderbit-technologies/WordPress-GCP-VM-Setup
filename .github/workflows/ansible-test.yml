@@ -1,0 +1,55 @@
+name: Ansible Playbook Test
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'ansible/**'
+      - '.github/workflows/ansible-test.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'ansible/**'
+      - '.github/workflows/ansible-test.yml'
+
+jobs:
+  vagrant-test:
+    runs-on: macos-12
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          brew update
+          brew install --cask virtualbox
+          brew install vagrant
+          vagrant --version
+          VBoxManage --version
+
+      - name: Install Ansible Galaxy Collections (Host)
+        run: |
+          brew install ansible
+          ansible-galaxy collection install community.mysql
+
+      - name: Syntax Check
+        run: |
+          cd ansible
+          ansible-playbook playbook.yml --syntax-check
+
+      - name: Run Vagrant Up
+        run: |
+          cd ansible
+          vagrant up --provider=virtualbox
+
+      - name: Verify Deployment (Internal)
+        run: |
+          cd ansible
+          # Check if Nginx is listening on port 80 inside the VM
+          vagrant ssh -c "curl -I http://localhost"
+
+      - name: Idempotency Check
+        run: |
+          cd ansible
+          vagrant provision
+          vagrant ssh -c "curl -I http://localhost"
