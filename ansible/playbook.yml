@@ -1,22 +1,15 @@
 ---
 - hosts: all
   become: yes
-  vars_prompt:
-    - name: "wp_db_pass"
-      prompt: "Enter the WordPress database password"
-      private: yes
-      confirm: yes
-    - name: "wp_admin_pass"
-      prompt: "Enter the WordPress admin password"
-      private: yes
-      confirm: yes
   vars:
     # Defaults (can be overridden via inventory or command line)
     domain: "example.com"
     use_www: true
     wp_db_name: "wpdb"
     wp_db_user: "wpuser"
+    wp_db_pass: "changeme123" # In production, use ansible-vault or prompt
     wp_admin_user: "admin"
+    wp_admin_pass: "changeme123" # In production, use ansible-vault or prompt
     admin_email: "admin@{{ domain }}"
     enable_fail2ban: true
     swap_size: "2G"

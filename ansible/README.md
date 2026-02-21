@@ -35,7 +35,7 @@ This Ansible playbook maps these tasks to roles:
 
 ## Usage
 
-1.  Update `inventory.ini` with your server IP/hostname (an example file is included in this directory).
+1.  Update `inventory.ini` with your server IP/hostname.
 2.  Update `playbook.yml` variables (domain, db_name, etc.).
 3.  Run the playbook:
     ```bash
