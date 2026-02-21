@@ -12,9 +12,11 @@
     wp_admin_pass: "changeme123" # In production, use ansible-vault or prompt
     admin_email: "admin@{{ domain }}"
     enable_fail2ban: true
+    enable_ssl: false
     swap_size: "2G"
 
   roles:
     - common
     - swap
     - wordpress
+    - security

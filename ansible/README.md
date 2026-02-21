@@ -14,7 +14,8 @@ The bash scripts perform the following tasks:
 This Ansible playbook maps these tasks to roles:
 -   **common**: Updates apt cache, installs basic utilities.
 -   **swap**: Handles swap creation and persistence (maps to `setup-swap.sh`).
--   **wordpress**: Handles Nginx, PHP, MariaDB, WP installation and configuration (maps to `setup-wp-nginx.sh`).
+-   **wordpress**: Handles Nginx, PHP, MariaDB, WP installation and configuration (maps to `setup-wp-nginx.sh`). Also installs Certbot; SSL certificate issuance is enabled by setting `enable_ssl: true` (requires valid DNS pointing to the server).
+-   **security**: Installs and configures Fail2Ban (SSH jail) and Unattended Upgrades, and hardens WordPress file permissions. Fail2Ban can be disabled with `enable_fail2ban: false`.
 
 ## Benefits of Ansible over Bash Scripts
 
