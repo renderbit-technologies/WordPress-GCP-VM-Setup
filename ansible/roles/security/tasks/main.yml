@@ -61,8 +61,3 @@
     group: www-data
     mode: '0640'
 
-# Handlers
-- name: Restart Fail2Ban
-  service:
-    name: fail2ban
-    state: restarted
