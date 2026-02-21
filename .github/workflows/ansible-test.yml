@@ -1,0 +1,69 @@
+name: Ansible Playbook Test
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'ansible/**'
+      - '.github/workflows/ansible-test.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'ansible/**'
+      - '.github/workflows/ansible-test.yml'
+
+jobs:
+  vagrant-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Install VirtualBox
+        run: |
+          sudo apt-get update
+          # Removing virtualbox-ext-pack as it requires interactive license acceptance
+          sudo apt-get install -y virtualbox
+
+      - name: Install Vagrant
+        run: |
+          wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+          sudo apt-get update
+          sudo apt-get install -y vagrant
+          vagrant --version
+
+      - name: Install Ansible
+        run: |
+          sudo apt-get install -y ansible
+          ansible --version
+          ansible-galaxy collection install community.mysql
+
+      - name: Syntax Check
+        run: |
+          cd ansible
+          ansible-playbook playbook.yml --syntax-check
+
+      - name: Run Vagrant Up
+        run: |
+          cd ansible
+          # GitHub Actions runners might not support hardware virtualization for VirtualBox well.
+          # But we try.
+          vagrant up --provider=virtualbox
+
+      - name: Verify Deployment (Internal)
+        run: |
+          cd ansible
+          vagrant ssh -c "curl -I http://localhost"
+
+      - name: Idempotency Check
+        run: |
+          cd ansible
+          vagrant provision
+          vagrant ssh -c "curl -I http://localhost"

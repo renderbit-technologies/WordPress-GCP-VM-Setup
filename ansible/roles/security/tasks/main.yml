@@ -1,0 +1,68 @@
+---
+# Unattended Upgrades
+- name: Install unattended-upgrades
+  apt:
+    name:
+      - unattended-upgrades
+      - apt-listchanges
+    state: present
+
+- name: Enable unattended-upgrades
+  command: dpkg-reconfigure -f noninteractive unattended-upgrades
+  changed_when: false
+
+# Fail2Ban
+- name: Install Fail2Ban
+  apt:
+    name: fail2ban
+    state: present
+  when: enable_fail2ban | default(true)
+
+- name: Configure Fail2Ban jail
+  copy:
+    dest: /etc/fail2ban/jail.local
+    content: |
+      [DEFAULT]
+      bantime = 1h
+      findtime = 15m
+      maxretry = 5
+      backend = auto
+
+      [sshd]
+      enabled = true
+      port = ssh
+      logpath = %(sshd_log)s
+    owner: root
+    group: root
+    mode: '0644'
+  when: enable_fail2ban | default(true)
+  notify: Restart Fail2Ban
+
+- name: Enable and start Fail2Ban
+  service:
+    name: fail2ban
+    state: started
+    enabled: yes
+  when: enable_fail2ban | default(true)
+
+# File permissions hardening
+- name: Set WordPress directory permissions
+  command: find /var/www/{{ domain }} -type d -exec chmod 0775 {} +
+  changed_when: false
+
+- name: Set WordPress file permissions
+  command: find /var/www/{{ domain }} -type f -exec chmod 0664 {} +
+  changed_when: false
+
+- name: Lock down wp-config.php
+  file:
+    path: /var/www/{{ domain }}/wp-config.php
+    owner: www-data
+    group: www-data
+    mode: '0640'
+
+# Handlers
+- name: Restart Fail2Ban
+  service:
+    name: fail2ban
+    state: restarted

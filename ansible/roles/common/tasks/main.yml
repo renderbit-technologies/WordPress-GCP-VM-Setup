@@ -1,0 +1,17 @@
+---
+- name: Update apt cache
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: Install basic packages
+  apt:
+    name:
+      - curl
+      - git
+      - unzip
+      - zip
+      - software-properties-common
+      - python3-pip
+      - python3-pymysql # Required for mysql_db module
+    state: present

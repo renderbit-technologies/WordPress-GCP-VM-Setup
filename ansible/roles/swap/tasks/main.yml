@@ -1,0 +1,55 @@
+---
+- name: Check if swap file exists
+  stat:
+    path: /swapfile
+  register: swap_file_check
+
+- name: Create swap file
+  command: fallocate -l {{ swap_size }} /swapfile
+  when: not swap_file_check.stat.exists
+
+- name: Set permissions on swap file
+  file:
+    path: /swapfile
+    mode: '0600'
+    owner: root
+    group: root
+
+- name: Format swap file
+  command: mkswap /swapfile
+  when: not swap_file_check.stat.exists
+
+- name: Enable swap
+  command: swapon /swapfile
+  when: not swap_file_check.stat.exists
+  # Or use ansible.posix.mount if you want idempotency via /proc/swaps check,
+  # but enabling is usually done via fstab + mount -a or manual swapon.
+  # Actually, swapon returns 0 if already enabled usually?
+  # No, running swapon on active swap errors. The 'when' condition handles first run.
+  # Ideally check if active: command: swapon --show | grep /swapfile
+
+- name: Add swap to fstab
+  mount:
+    path: none
+    src: /swapfile
+    fstype: swap
+    opts: sw
+    passno: 0
+    dump: 0
+    state: present
+
+- name: Configure vm.swappiness
+  sysctl:
+    name: vm.swappiness
+    value: '10'
+    state: present
+    sysctl_file: /etc/sysctl.conf
+    reload: yes
+
+- name: Configure vm.vfs_cache_pressure
+  sysctl:
+    name: vm.vfs_cache_pressure
+    value: '50'
+    state: present
+    sysctl_file: /etc/sysctl.conf
+    reload: yes
