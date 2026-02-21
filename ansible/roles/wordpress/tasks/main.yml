@@ -119,9 +119,12 @@
     state: absent
     notify: Restart Nginx
 
-# Certbot (commented out to avoid interactive issues in test)
-# - name: Run Certbot
-#   command: certbot --nginx -d {{ domain }} -d www.{{ domain }} --non-interactive --agree-tos -m {{ admin_email }}
+# SSL via Certbot (requires valid DNS and enable_ssl: true)
+- name: Run Certbot to obtain SSL certificate
+  command: >
+    certbot --nginx -d {{ domain }}{% if use_www %} -d www.{{ domain }}{% endif %}
+    --non-interactive --agree-tos -m {{ admin_email }} --redirect
+  when: enable_ssl | default(false)
 
 # Handlers
 - name: Restart Nginx

@@ -19,9 +19,11 @@
     wp_admin_user: "admin"
     admin_email: "admin@{{ domain }}"
     enable_fail2ban: true
+    enable_ssl: false
     swap_size: "2G"
 
   roles:
     - common
     - swap
     - wordpress
+    - security
