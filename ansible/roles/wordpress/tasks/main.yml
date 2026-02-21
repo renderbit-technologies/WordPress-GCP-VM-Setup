@@ -126,13 +126,3 @@
     --non-interactive --agree-tos -m {{ admin_email }} --redirect
   when: enable_ssl | default(false)
 
-# Handlers
-- name: Restart Nginx
-  service:
-    name: nginx
-    state: restarted
-
-- name: Restart PHP-FPM
-  service:
-    name: php8.3-fpm
-    state: restarted
