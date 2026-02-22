@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+WP_PATH="/var/www/{{ domain }}"
+sudo -u www-data -- wp --path="$WP_PATH" core update --minor --allow-root || true
+sudo -u www-data -- wp --path="$WP_PATH" plugin update --all --allow-root || true
+sudo -u www-data -- wp --path="$WP_PATH" theme update --all --allow-root || true
+echo "WP weekly update run for $WP_PATH" | logger -t wp-updates

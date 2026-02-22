@@ -1,0 +1,73 @@
+server {
+    listen 80;
+    listen [::]:80;
+    server_name {{ domain }}{% if use_www %} www.{{ domain }}{% endif %};
+
+    root /var/www/{{ domain }};
+    index index.php index.html index.htm;
+
+    include /etc/nginx/snippets/security-headers.conf;
+
+    location / {
+        try_files $uri $uri/ /index.php?$args;
+    }
+
+    # Deny access to sensitive files
+    location ~* /(wp-config.php|readme.html|license.txt|install.php) {
+        deny all;
+        access_log off;
+        log_not_found off;
+    }
+
+    # Block xmlrpc
+    location = /xmlrpc.php {
+        deny all;
+        access_log off;
+        log_not_found off;
+    }
+
+    # Static files
+    location ~* \.(?:css|js|jpg|jpeg|gif|png|svg|ico|woff2?|ttf|eot)$ {
+        try_files $uri =404;
+        expires max;
+        access_log off;
+    }
+
+    # PHP via php8.3-fpm socket (MAIN)
+    location ~ \.php$ {
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        include fastcgi_params;
+    }
+
+    # phpMyAdmin Location Block
+    location ^~ /phpmyadmin {
+        root /usr/share;
+        index index.php index.html index.htm;
+
+        location ~ ^/phpmyadmin/(.+\.php)$ {
+            root /usr/share;
+            fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+            fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+            include fastcgi_params;
+            include snippets/fastcgi-php.conf;
+        }
+
+        location ~* ^/phpmyadmin/(.+\.(jpg|jpeg|gif|css|png|js|ico|html|xml|txt))$ {
+            root /usr/share;
+        }
+    }
+
+    # Deny hidden files
+    location ~ /\. {
+        deny all;
+        access_log off;
+        log_not_found off;
+    }
+
+    # Deny PHP execution in uploads directory
+    location ~* /(?:uploads|files)/.*\.php$ {
+        deny all;
+    }
+}

@@ -13,7 +13,7 @@
     dest: /etc/apt/apt.conf.d/50unattended-upgrades
     owner: root
     group: root
-    mode: '0644'
+    mode: "0644"
 
 - name: Enable unattended-upgrades
   copy:
@@ -23,7 +23,7 @@
       APT::Periodic::Unattended-Upgrade "1";
     owner: root
     group: root
-    mode: '0644'
+    mode: "0644"
 
 # Fail2Ban
 - name: Install Fail2Ban
@@ -48,7 +48,7 @@
       logpath = %(sshd_log)s
     owner: root
     group: root
-    mode: '0644'
+    mode: "0644"
   when: enable_fail2ban | default(true)
   notify: Restart Fail2Ban
 
@@ -73,4 +73,4 @@
     path: /var/www/{{ domain }}/wp-config.php
     owner: www-data
     group: www-data
-    mode: '0640'
+    mode: "0640"

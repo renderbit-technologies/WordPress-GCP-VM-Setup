@@ -1,46 +1,210 @@
 ---
+# --------------------------------------------------------
+# PPAs and Package Installation
+# --------------------------------------------------------
 - name: Add PHP PPA
   apt_repository:
-    repo: 'ppa:ondrej/php'
+    repo: "ppa:ondrej/php"
     state: present
     update_cache: yes
 
-- name: Install Nginx, PHP, MariaDB, Certbot
+- name: Add Nginx PPA
+  apt_repository:
+    repo: "ppa:ondrej/nginx"
+    state: present
+    update_cache: yes
+
+- name: Install Nginx, PHP 8.3, MariaDB, Certbot
   apt:
     name:
       - nginx
+      - mariadb-server
+      - php8.3
       - php8.3-fpm
+      - php8.3-cli
       - php8.3-mysql
       - php8.3-xml
       - php8.3-curl
       - php8.3-mbstring
       - php8.3-zip
       - php8.3-gd
-      - mariadb-server
+      - php8.3-intl
+      - php8.3-opcache
+      - php8.3-imagick
       - certbot
       - python3-certbot-nginx
     state: present
 
-- name: Install WP-CLI
-  get_url:
-    url: https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
-    dest: /usr/local/bin/wp
-    mode: '0755'
+# --------------------------------------------------------
+# Enable Services
+# --------------------------------------------------------
+- name: Enable and start Nginx
+  service:
+    name: nginx
+    state: started
+    enabled: yes
 
-- name: Create Web Root
+- name: Enable and start PHP-FPM
+  service:
+    name: php8.3-fpm
+    state: started
+    enabled: yes
+
+- name: Enable and start MariaDB
+  service:
+    name: mariadb
+    state: started
+    enabled: yes
+
+# --------------------------------------------------------
+# PHP-FPM Pool Tuning
+# --------------------------------------------------------
+- name: Gather CPU core count for FPM tuning
+  set_fact:
+    php_cores: "{{ ansible_processor_vcpus | default(1) }}"
+
+- name: Calculate FPM pool parameters
+  set_fact:
+    fpm_max_children: "{{ [php_cores | int * 5, 5] | max }}"
+    fpm_start_servers: "{{ [php_cores | int * 2, 2] | max }}"
+    fpm_min_spare_servers: "{{ [php_cores | int, 1] | max }}"
+    fpm_max_spare_servers: "{{ [php_cores | int * 3, 3] | max }}"
+    fpm_max_requests: 500
+
+- name: Tune PHP-FPM pool (pm = dynamic)
+  lineinfile:
+    path: /etc/php/8.3/fpm/pool.d/www.conf
+    regexp: "^{{ item.key }} ="
+    line: "{{ item.key }} = {{ item.value }}"
+    backrefs: no
+  loop:
+    - { key: "pm", value: "dynamic" }
+    - { key: "pm.max_children", value: "{{ fpm_max_children }}" }
+    - { key: "pm.start_servers", value: "{{ fpm_start_servers }}" }
+    - { key: "pm.min_spare_servers", value: "{{ fpm_min_spare_servers }}" }
+    - { key: "pm.max_spare_servers", value: "{{ fpm_max_spare_servers }}" }
+    - { key: "pm.max_requests", value: "{{ fpm_max_requests }}" }
+  notify: Restart PHP-FPM
+
+- name: Ensure FPM listen owner/group is www-data
+  lineinfile:
+    path: /etc/php/8.3/fpm/pool.d/www.conf
+    regexp: "^{{ item.key }} ="
+    line: "{{ item.key }} = {{ item.value }}"
+  loop:
+    - { key: "listen.owner", value: "www-data" }
+    - { key: "listen.group", value: "www-data" }
+  notify: Restart PHP-FPM
+
+# --------------------------------------------------------
+# PHP.ini Tuning
+# --------------------------------------------------------
+- name: Tune php.ini for FPM
+  lineinfile:
+    path: /etc/php/8.3/fpm/php.ini
+    regexp: "^;?{{ item.key }} ="
+    line: "{{ item.key }} = {{ item.value }}"
+  loop:
+    - { key: "memory_limit", value: "256M" }
+    - { key: "upload_max_filesize", value: "64M" }
+    - { key: "post_max_size", value: "64M" }
+    - { key: "max_execution_time", value: "300" }
+    - { key: "realpath_cache_size", value: "4096k" }
+    - { key: "realpath_cache_ttl", value: "600" }
+  notify: Restart PHP-FPM
+
+# --------------------------------------------------------
+# OPcache Configuration
+# --------------------------------------------------------
+- name: Configure OPcache
+  template:
+    src: opcache.ini.j2
+    dest: /etc/php/8.3/mods-available/opcache.ini
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart PHP-FPM
+
+# --------------------------------------------------------
+# phpMyAdmin Installation
+# --------------------------------------------------------
+- name: Check if phpMyAdmin is installed
+  stat:
+    path: /usr/share/phpmyadmin
+  register: pma_check
+
+- name: Download phpMyAdmin
+  get_url:
+    url: https://www.phpmyadmin.net/downloads/phpMyAdmin-latest-all-languages.zip
+    dest: /tmp/pma.zip
+    mode: "0644"
+  when: not pma_check.stat.exists
+
+- name: Unzip phpMyAdmin
+  unarchive:
+    src: /tmp/pma.zip
+    dest: /tmp/
+    remote_src: yes
+  when: not pma_check.stat.exists
+
+- name: Find phpMyAdmin extracted directory
+  find:
+    paths: /tmp
+    patterns: "phpMyAdmin-*-all-languages"
+    file_type: directory
+  register: pma_dir
+  when: not pma_check.stat.exists
+
+- name: Move phpMyAdmin to /usr/share/phpmyadmin
+  command: "mv {{ pma_dir.files[0].path }} /usr/share/phpmyadmin"
+  when: not pma_check.stat.exists and pma_dir.files | length > 0
+
+- name: Copy phpMyAdmin sample config
+  copy:
+    src: /usr/share/phpmyadmin/config.sample.inc.php
+    dest: /usr/share/phpmyadmin/config.inc.php
+    remote_src: yes
+    owner: www-data
+    group: www-data
+    mode: "0640"
+    force: no # Don't overwrite if already configured
+
+- name: Inject blowfish secret into phpMyAdmin config
+  replace:
+    path: /usr/share/phpmyadmin/config.inc.php
+    regexp: "\\$cfg\\['blowfish_secret'\\] = '';"
+    replace: "$cfg['blowfish_secret'] = '{{ pma_blowfish }}';"
+
+- name: Set phpMyAdmin ownership
   file:
-    path: /var/www/{{ domain }}
+    path: /usr/share/phpmyadmin
     state: directory
     owner: www-data
     group: www-data
-    mode: '0775'
+    mode: "0755"
+    recurse: yes
 
-# Database Setup
+- name: Create phpMyAdmin tmp directory
+  file:
+    path: /usr/share/phpmyadmin/tmp
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: "0777"
+
+- name: Clean up phpMyAdmin zip
+  file:
+    path: /tmp/pma.zip
+    state: absent
+
+# --------------------------------------------------------
+# MariaDB Database & Hardening
+# --------------------------------------------------------
 - name: Create MariaDB Database
   community.mysql.mysql_db:
     name: "{{ wp_db_name }}"
     state: present
-    login_unix_socket: /var/run/mysqld/mysqld.sock # Use socket for local root
+    login_unix_socket: /var/run/mysqld/mysqld.sock
 
 - name: Create MariaDB User
   community.mysql.mysql_user:
@@ -51,59 +215,65 @@
     state: present
     login_unix_socket: /var/run/mysqld/mysqld.sock
 
-# WordPress Setup
-- name: Check if WP is installed
-  stat:
-    path: /var/www/{{ domain }}/wp-config.php
-  register: wp_config_check
+- name: Remove anonymous MySQL users
+  community.mysql.mysql_user:
+    name: ""
+    host_all: yes
+    state: absent
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+  ignore_errors: yes
 
-- name: Download WordPress
-  become_user: www-data
-  shell: wp core download --path=/var/www/{{ domain }}
-  when: not wp_config_check.stat.exists
+- name: Drop test database
+  community.mysql.mysql_db:
+    name: test
+    state: absent
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+  ignore_errors: yes
 
-- name: Configure WordPress
-  become_user: www-data
-  shell: |
-    wp config create \
-    --dbname={{ wp_db_name }} \
-    --dbuser={{ wp_db_user }} \
-    --dbpass={{ wp_db_pass }} \
-    --path=/var/www/{{ domain }}
-  when: not wp_config_check.stat.exists
+- name: Set MariaDB root password
+  community.mysql.mysql_user:
+    name: root
+    password: "{{ mysql_root_pass }}"
+    host: localhost
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+  ignore_errors: yes
 
-- name: Install WordPress
-  become_user: www-data
-  shell: |
-    wp core install \
-    --url=http://{{ domain }} \
-    --title="{{ domain }}" \
-    --admin_user={{ wp_admin_user }} \
-    --admin_password={{ wp_admin_pass }} \
-    --admin_email={{ admin_email }} \
-    --path=/var/www/{{ domain }} \
-    --skip-email
-  when: not wp_config_check.stat.exists
-  ignore_errors: yes # Might fail if already installed but config missing (unlikely)
+# --------------------------------------------------------
+# Install WP-CLI
+# --------------------------------------------------------
+- name: Install WP-CLI
+  get_url:
+    url: https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
+    dest: /usr/local/bin/wp
+    mode: "0755"
 
-# Nginx Configuration (Placeholder)
-- name: Configure Nginx (Simplistic Example)
-  copy:
+# --------------------------------------------------------
+# Nginx Configuration
+# --------------------------------------------------------
+- name: Create Web Root
+  file:
+    path: /var/www/{{ domain }}
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: "0775"
+
+- name: Deploy Nginx security headers snippet
+  template:
+    src: security-headers.conf.j2
+    dest: /etc/nginx/snippets/security-headers.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart Nginx
+
+- name: Deploy Nginx site configuration
+  template:
+    src: nginx-site.conf.j2
     dest: /etc/nginx/sites-available/{{ domain }}
-    content: |
-      server {
-          listen 80;
-          server_name {{ domain }} www.{{ domain }};
-          root /var/www/{{ domain }};
-          index index.php index.html;
-          location / {
-              try_files $uri $uri/ /index.php?$args;
-          }
-          location ~ \.php$ {
-              include snippets/fastcgi-php.conf;
-              fastcgi_pass unix:/run/php/php8.3-fpm.sock;
-          }
-      }
+    owner: root
+    group: root
+    mode: "0644"
   notify: Restart Nginx
 
 - name: Enable Nginx Site
@@ -119,11 +289,234 @@
     state: absent
   notify: Restart Nginx
 
-# SSL via Certbot (requires valid DNS and enable_ssl: true)
+# --------------------------------------------------------
+# WordPress Download, Config & Install
+# --------------------------------------------------------
+- name: Check if WP is installed
+  stat:
+    path: /var/www/{{ domain }}/wp-config.php
+  register: wp_config_check
+
+- name: Download WordPress
+  become_user: www-data
+  shell: wp core download --path=/var/www/{{ domain }} --skip-content --force
+  when: not wp_config_check.stat.exists
+
+- name: Configure WordPress
+  become_user: www-data
+  shell: |
+    wp config create \
+    --dbname={{ wp_db_name }} \
+    --dbuser={{ wp_db_user }} \
+    --dbpass={{ wp_db_pass }} \
+    --locale=en_US \
+    --path=/var/www/{{ domain }} \
+    --force
+  when: not wp_config_check.stat.exists
+
+- name: Install WordPress
+  become_user: www-data
+  shell: |
+    wp core install \
+    --url=http://{{ domain }} \
+    --title="{{ domain }}" \
+    --admin_user={{ wp_admin_user }} \
+    --admin_password={{ wp_admin_pass }} \
+    --admin_email={{ admin_email }} \
+    --path=/var/www/{{ domain }} \
+    --skip-email
+  when: not wp_config_check.stat.exists
+  ignore_errors: yes
+
+# --------------------------------------------------------
+# wp-config.php Security Injections
+# --------------------------------------------------------
+- name: Inject security settings into wp-config.php
+  blockinfile:
+    path: /var/www/{{ domain }}/wp-config.php
+    insertbefore: "require_once ABSPATH . 'wp-settings.php';"
+    marker: "/* {mark} ANSIBLE MANAGED SECURITY BLOCK */"
+    block: |
+      /** SSL/Reverse Proxy Fix (added by installer) */
+      if (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') {
+          $_SERVER['HTTPS'] = 'on';
+      }
+
+      /** Security & auto-update settings */
+      define('FS_METHOD', 'direct');
+      define('DISALLOW_FILE_EDIT', true);
+      define('WP_AUTO_UPDATE_CORE', 'minor');
+      if ( ! defined('FORCE_SSL_ADMIN') ) define('FORCE_SSL_ADMIN', true);
+
+# --------------------------------------------------------
+# XML-RPC MU-Plugin
+# --------------------------------------------------------
+- name: Create MU-plugins directory
+  file:
+    path: /var/www/{{ domain }}/wp-content/mu-plugins
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: "0775"
+
+- name: Deploy XML-RPC mitigation MU-plugin
+  copy:
+    src: disable-xmlrpc-pingback.php
+    dest: /var/www/{{ domain }}/wp-content/mu-plugins/disable-xmlrpc-pingback.php
+    owner: www-data
+    group: www-data
+    mode: "0664"
+
+# --------------------------------------------------------
+# Remove Version Info Files
+# --------------------------------------------------------
+- name: Remove readme.html and license.txt
+  file:
+    path: "/var/www/{{ domain }}/{{ item }}"
+    state: absent
+  loop:
+    - readme.html
+    - license.txt
+
+# --------------------------------------------------------
+# Remove Default Admin User & Set Roles
+# --------------------------------------------------------
+- name: Check if default admin user exists
+  become_user: www-data
+  shell: wp user get admin --field=ID --path=/var/www/{{ domain }}
+  register: admin_user_check
+  ignore_errors: yes
+  changed_when: false
+
+- name: Remove default admin user
+  become_user: www-data
+  shell: "wp user delete admin --reassign={{ wp_admin_user }} --path=/var/www/{{ domain }}"
+  when: admin_user_check.rc == 0
+  ignore_errors: yes
+
+- name: Ensure admin user has administrator role
+  become_user: www-data
+  shell: "wp user set-role {{ wp_admin_user }} administrator --path=/var/www/{{ domain }}"
+  ignore_errors: yes
+  changed_when: false
+
+# --------------------------------------------------------
+# Install Essential Plugins
+# --------------------------------------------------------
+- name: Install essential WordPress plugins
+  become_user: www-data
+  shell: |
+    wp plugin install \
+    jetpack \
+    akismet \
+    jetpack-protect \
+    jetpack-boost \
+    amp \
+    sucuri-scanner \
+    wordfence \
+    wp-mail-smtp \
+    cloudflare-flexible-ssl \
+    google-analytics-for-wordpress \
+    updraftplus \
+    better-search-replace \
+    --path=/var/www/{{ domain }}
+  ignore_errors: yes
+
+# --------------------------------------------------------
+# Enable Plugin/Theme Auto-Updates
+# --------------------------------------------------------
+- name: Enable plugin auto-updates
+  become_user: www-data
+  shell: "wp plugin auto-updates enable --all --path=/var/www/{{ domain }}"
+  ignore_errors: yes
+  changed_when: false
+
+- name: Enable theme auto-updates
+  become_user: www-data
+  shell: "wp theme auto-updates enable --all --path=/var/www/{{ domain }}"
+  ignore_errors: yes
+  changed_when: false
+
+# --------------------------------------------------------
+# Weekly WP Update Cron Job
+# --------------------------------------------------------
+- name: Deploy weekly WP update cron script
+  template:
+    src: wp-updates.sh.j2
+    dest: /etc/cron.weekly/wp-updates
+    owner: root
+    group: root
+    mode: "0750"
+
+# --------------------------------------------------------
+# SSL via Certbot (conditional)
+# --------------------------------------------------------
 - name: Run Certbot to obtain SSL certificate
   command: >
     certbot --nginx -d {{ domain }}{% if use_www %} -d www.{{ domain }}{% endif %}
-    --non-interactive --agree-tos -m {{ admin_email }} --redirect
+    --non-interactive --agree-tos -m {{ admin_email }} --redirect --expand
   args:
     creates: /etc/letsencrypt/live/{{ domain }}/fullchain.pem
-  when: enable_ssl | default(false)
+  when: enable_ssl | default(true)
+  ignore_errors: yes
+
+- name: Enable Certbot renewal timer
+  service:
+    name: certbot.timer
+    state: started
+    enabled: yes
+  when: enable_ssl | default(true)
+  ignore_errors: yes
+
+# --------------------------------------------------------
+# File Permissions (Final Pass)
+# --------------------------------------------------------
+- name: Set WordPress directory ownership
+  file:
+    path: /var/www/{{ domain }}
+    state: directory
+    owner: www-data
+    group: www-data
+    recurse: yes
+
+- name: Lock wp-config.php
+  file:
+    path: /var/www/{{ domain }}/wp-config.php
+    owner: www-data
+    group: www-data
+    mode: "0640"
+  ignore_errors: yes
+
+# --------------------------------------------------------
+# Save Credentials
+# --------------------------------------------------------
+- name: Save credentials to file
+  template:
+    src: wp-credentials.j2
+    dest: /root/.wp-credentials
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Display generated credentials
+  debug:
+    msg: |
+      ===================================================================
+      WordPress + phpMyAdmin installation complete for: {{ domain }}
+
+      Credentials saved to: /root/.wp-credentials (mode 600)
+
+      MySQL root password: {{ mysql_root_pass }}
+
+      WordPress DB:
+        DB name: {{ wp_db_name }}
+        DB user: {{ wp_db_user }}
+        DB password: {{ wp_db_pass }}
+
+      WordPress admin account:
+        Username: {{ wp_admin_user }}
+        Password: {{ wp_admin_pass }}
+        Admin email: {{ admin_email }}
+
+      phpMyAdmin URL: https://{{ domain }}/phpmyadmin
+      ===================================================================
