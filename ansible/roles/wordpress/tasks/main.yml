@@ -124,5 +124,6 @@
   command: >
     certbot --nginx -d {{ domain }}{% if use_www %} -d www.{{ domain }}{% endif %}
     --non-interactive --agree-tos -m {{ admin_email }} --redirect
+  args:
+    creates: /etc/letsencrypt/live/{{ domain }}/fullchain.pem
   when: enable_ssl | default(false)
-
