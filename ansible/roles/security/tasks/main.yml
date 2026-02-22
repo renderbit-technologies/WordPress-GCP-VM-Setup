@@ -16,8 +16,14 @@
     mode: '0644'
 
 - name: Enable unattended-upgrades
-  command: dpkg-reconfigure -f noninteractive unattended-upgrades
-  changed_when: false
+  copy:
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+    owner: root
+    group: root
+    mode: '0644'
 
 # Fail2Ban
 - name: Install Fail2Ban
