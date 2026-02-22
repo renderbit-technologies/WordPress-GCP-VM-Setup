@@ -12,7 +12,7 @@
       - unzip
       - zip
       - software-properties-common
-      - acl
+      - acl  # Required for Ansible become with unprivileged users
       - python3-pip
       - python3-pymysql # Required for mysql_db module
     state: present
