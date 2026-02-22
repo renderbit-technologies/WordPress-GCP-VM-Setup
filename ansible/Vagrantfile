@@ -6,6 +6,9 @@ Vagrant.configure("2") do |config|
   # Using bento/ubuntu-24.04 as it is reliable and widely available
   config.vm.box = "bento/ubuntu-24.04"
 
+  # Increase boot timeout for slow CI environments
+  config.vm.boot_timeout = 600
+
   # Configure a private network for easy access
   config.vm.network "private_network", ip: "192.168.56.10"
 
@@ -13,6 +16,7 @@ Vagrant.configure("2") do |config|
   config.vm.provider "virtualbox" do |vb|
     vb.memory = "2048"
     vb.cpus = 2
+    vb.gui = false
   end
 
   # Ansible Provisioner - runs locally on the guest
