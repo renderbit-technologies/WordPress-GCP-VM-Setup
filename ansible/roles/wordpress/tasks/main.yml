@@ -104,20 +104,20 @@
               fastcgi_pass unix:/run/php/php8.3-fpm.sock;
           }
       }
-    notify: Restart Nginx
+  notify: Restart Nginx
 
 - name: Enable Nginx Site
   file:
     src: /etc/nginx/sites-available/{{ domain }}
     dest: /etc/nginx/sites-enabled/{{ domain }}
     state: link
-    notify: Restart Nginx
+  notify: Restart Nginx
 
 - name: Remove Default Nginx Site
   file:
     path: /etc/nginx/sites-enabled/default
     state: absent
-    notify: Restart Nginx
+  notify: Restart Nginx
 
 # SSL via Certbot (requires valid DNS and enable_ssl: true)
 - name: Run Certbot to obtain SSL certificate
@@ -126,13 +126,3 @@
     --non-interactive --agree-tos -m {{ admin_email }} --redirect
   when: enable_ssl | default(false)
 
-# Handlers
-- name: Restart Nginx
-  service:
-    name: nginx
-    state: restarted
-
-- name: Restart PHP-FPM
-  service:
-    name: php8.3-fpm
-    state: restarted
