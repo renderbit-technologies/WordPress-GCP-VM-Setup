@@ -7,9 +7,23 @@
       - apt-listchanges
     state: present
 
+- name: Configure unattended-upgrades
+  template:
+    src: 50unattended-upgrades.j2
+    dest: /etc/apt/apt.conf.d/50unattended-upgrades
+    owner: root
+    group: root
+    mode: '0644'
+
 - name: Enable unattended-upgrades
-  command: dpkg-reconfigure -f noninteractive unattended-upgrades
-  changed_when: false
+  copy:
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+    owner: root
+    group: root
+    mode: '0644'
 
 # Fail2Ban
 - name: Install Fail2Ban
@@ -60,4 +74,3 @@
     owner: www-data
     group: www-data
     mode: '0640'
-
