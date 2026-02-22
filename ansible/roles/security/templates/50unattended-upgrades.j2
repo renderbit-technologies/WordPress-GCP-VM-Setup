@@ -22,7 +22,7 @@ Unattended-Upgrade::Mail "{{ admin_email | default('root') }}";
 
 // Set this value to "true" to get emails only on errors. Default
 // is to always send an email if the log has changed.
-// Unattended-Upgrade::MailOnlyOnError "true";
+Unattended-Upgrade::MailOnlyOnError "true";
 
 // Remove unused automatically installed kernel-related packages
 // (kernel images, kernel headers and kernel version locked tools).
