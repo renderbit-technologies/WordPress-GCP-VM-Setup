@@ -27,12 +27,12 @@ The playbook executes four roles in sequence:
 
 This is the main role and handles everything from packages to a working WordPress site:
 
-**Package Installation**
+#### Package Installation
 
 - Adds Ondrej PPAs for PHP and Nginx.
 - Installs Nginx, MariaDB, PHP 8.3 (FPM, CLI, and extensions: mysql, xml, curl, mbstring, zip, gd, intl, opcache, imagick), Certbot with Nginx plugin.
 
-**PHP-FPM Tuning**
+#### PHP-FPM Tuning
 
 - Calculates pool parameters based on available CPU cores:
   - `pm = dynamic`
@@ -44,12 +44,12 @@ This is the main role and handles everything from packages to a working WordPres
 - Sets `listen.owner` and `listen.group` to `www-data`.
 - Tunes `php.ini`: `memory_limit = 256M`, `upload_max_filesize = 64M`, `post_max_size = 64M`, `max_execution_time = 300`, `realpath_cache_size = 4096k`, `realpath_cache_ttl = 600`.
 
-**OPcache Configuration**
+#### OPcache Configuration
 
 - Deploys a tuned OPcache config via the `opcache.ini.j2` template:
   - `memory_consumption = 256`, `interned_strings_buffer = 16`, `max_accelerated_files = 10000`, `revalidate_freq = 2`.
 
-**phpMyAdmin**
+#### phpMyAdmin
 
 - Downloads the latest phpMyAdmin release (all-languages zip).
 - Extracts to `/usr/share/phpmyadmin`.
@@ -58,14 +58,14 @@ This is the main role and handles everything from packages to a working WordPres
 - Creates a writable `tmp/` directory for phpMyAdmin sessions.
 - **Idempotent**: skips download if `/usr/share/phpmyadmin` already exists.
 
-**MariaDB Setup & Hardening**
+#### MariaDB Setup & Hardening
 
 - Creates the WordPress database (`wp_db_name`) and user (`wp_db_user`) with full privileges.
 - Removes anonymous MySQL users and drops the `test` database.
 - Sets the MySQL root password.
 - Creates `/root/.my.cnf` (via `root-my.cnf.j2`) for passwordless root access after initial setup, enabling idempotent re-runs.
 
-**Nginx Configuration**
+#### Nginx Configuration
 
 - Creates the webroot at `/var/www/<domain>` with `www-data` ownership.
 - Deploys a security headers snippet (via `security-headers.conf.j2`):
@@ -83,7 +83,7 @@ This is the main role and handles everything from packages to a working WordPres
   - Denied PHP execution in `uploads/` and `files/` directories
 - Removes the default Nginx site.
 
-**WordPress Installation**
+#### WordPress Installation
 
 - Installs WP-CLI to `/usr/local/bin/wp`.
 - Downloads WordPress core (via `wp core download --skip-content`).
@@ -91,7 +91,7 @@ This is the main role and handles everything from packages to a working WordPres
 - Runs `wp core install` with the configured admin user, password, email, and site URL.
 - **Idempotent**: skips download, config, and install if `wp-config.php` already exists.
 
-**WordPress Hardening**
+#### WordPress Hardening
 
 - Injects security constants into `wp-config.php` (via `blockinfile` with markers):
   - `FS_METHOD = 'direct'`
@@ -104,7 +104,7 @@ This is the main role and handles everything from packages to a working WordPres
 - Removes the default `admin` user (if it exists) and reassigns content to the configured admin user.
 - Locks `wp-config.php` to mode `0640`.
 
-**Essential Plugins**
+#### Essential Plugins
 
 Installs (but does not activate) the following plugins:
 
@@ -121,11 +121,11 @@ Installs (but does not activate) the following plugins:
 
 Enables auto-updates for all plugins and themes.
 
-**Weekly Update Cron**
+#### Weekly Update Cron
 
 - Deploys a `/etc/cron.weekly/wp-updates` script (via `wp-updates.sh.j2`) that runs `wp core update --minor`, `wp plugin update --all`, and `wp theme update --all`.
 
-**SSL with Certbot**
+#### SSL with Certbot
 
 - Obtains a Let's Encrypt certificate via Certbot (Nginx plugin) with `--redirect` and `--non-interactive`.
 - Includes the `www` subdomain if `use_www: true`.
@@ -133,14 +133,14 @@ Enables auto-updates for all plugins and themes.
 - **Conditional**: only runs when `enable_ssl: true` (default). Set `enable_ssl: false` for local/Vagrant testing.
 - **Idempotent**: skips if the certificate already exists at `/etc/letsencrypt/live/<domain>/fullchain.pem`.
 
-**Credentials File**
+#### Credentials File
 
 - Saves all generated credentials to `/root/.wp-credentials` (mode `0600`) via the `wp-credentials.j2` template.
 - Displays credentials in the Ansible output at the end of the run.
 
 ### 4. `security` — Server Hardening
 
-**Unattended Upgrades**
+#### Unattended Upgrades
 
 - Installs `unattended-upgrades` and `apt-listchanges`.
 - Deploys a configuration (via `50unattended-upgrades.j2`) that:
@@ -150,13 +150,13 @@ Enables auto-updates for all plugins and themes.
   - Does **not** auto-reboot
 - Enables the periodic apt upgrade timer.
 
-**Fail2Ban**
+#### Fail2Ban
 
 - Installs and configures Fail2Ban with an SSH jail:
   - `bantime = 1h`, `findtime = 15m`, `maxretry = 5`
 - **Conditional**: only runs when `enable_fail2ban: true` (default).
 
-**File Permissions**
+#### File Permissions
 
 - Final permission pass on the WordPress directory:
   - Directories: `0775`
@@ -295,7 +295,7 @@ A `Vagrantfile` is included for local testing using a disposable VM.
 
 ## Directory Structure
 
-```
+```text
 ansible/
 ├── ansible.cfg                                     # Ansible settings (pipelining, Python interpreter)
 ├── inventory.ini                                   # Target host inventory

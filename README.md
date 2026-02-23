@@ -116,7 +116,7 @@ The following plugins are automatically installed (not activated — configure p
 
 ## Repository Structure
 
-```
+```text
 .
 ├── install.sh                  # Entrypoint — downloads and runs the setup scripts
 ├── setup-swap.sh               # Swap file creation and sysctl tuning
