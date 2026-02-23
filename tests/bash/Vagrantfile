@@ -1,0 +1,72 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.configure("2") do |config|
+  # Use Ubuntu 24.04 LTS (Noble Numbat)
+  config.vm.box = "bento/ubuntu-24.04"
+
+  # Increase boot timeout for slow CI environments
+  config.vm.boot_timeout = 600
+
+  # Configure a private network for easy access
+  config.vm.network "private_network", ip: "192.168.56.11"
+
+  # Sync the project root to /vagrant
+  config.vm.synced_folder "../../", "/vagrant"
+
+  # Configure CPU and Memory
+  config.vm.provider "virtualbox" do |vb|
+    vb.memory = "2048"
+    vb.cpus = 2
+    vb.gui = false
+  end
+
+  # Shell Provisioner
+  config.vm.provision "shell", inline: <<-SHELL
+    set -e
+    cd /vagrant
+
+    # Set environment variables for non-interactive installation
+    export DOMAIN="vagrant.local"
+    export USE_WWW="n"
+    export WP_DB="wp_test"
+    export WP_DB_USER="wp_user"
+    export WP_DB_PASS="secure_wp_password"
+    export WP_ADMIN_PASS="secure_admin_password"
+    export MYSQL_ROOT_PASS="secure_root_password"
+    export LE_EMAIL="admin@vagrant.local"
+    export ENABLE_FAIL2BAN="y"
+    export CONT="y"
+    export SWAP_SIZE="1G"
+
+    echo "Running setup-swap.sh..."
+    chmod +x setup-swap.sh
+    ./setup-swap.sh
+
+    echo "Running setup-wp-nginx.sh..."
+    chmod +x setup-wp-nginx.sh
+    ./setup-wp-nginx.sh
+
+    echo "Verifying installation..."
+    # Verify HTTP response
+    # Using Host header because Nginx is configured for vagrant.local
+    HTTP_CODE=\$(curl -s -o /dev/null -w "%{http_code}" -H "Host: vagrant.local" http://localhost)
+
+    if [[ "\$HTTP_CODE" == "200" || "\$HTTP_CODE" == "301" ]]; then
+        echo "Success: WordPress returned HTTP \$HTTP_CODE"
+    else
+        echo "Error: WordPress returned HTTP \$HTTP_CODE"
+        false
+    fi
+
+    # Verify Database Connection
+    if mysql -u wp_user -psecure_wp_password -h localhost -e "USE wp_test;" 2>/dev/null; then
+        echo "Success: Database connection verified."
+    else
+        echo "Error: Database connection failed."
+        false
+    fi
+
+    echo "Provisioning complete."
+  SHELL
+end
