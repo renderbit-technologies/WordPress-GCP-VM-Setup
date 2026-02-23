@@ -21,10 +21,10 @@ jobs:
       contents: read
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
       - name: Cache Vagrant boxes
-        uses: actions/cache@v5
+        uses: actions/cache@v4
         with:
           path: ~/.vagrant.d/boxes
           key: ${{ runner.os }}-vagrant-${{ hashFiles('tests/bash/Vagrantfile') }}
