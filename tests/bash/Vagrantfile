@@ -26,7 +26,8 @@ Vagrant.configure("2") do |config|
     set -e
     cd /vagrant
 
-    # Set environment variables for non-interactive installation
+    # Set environment variables for non-interactive installation.
+    # NOTE: These are test-only credentials. Never use these values in production.
     export DOMAIN="vagrant.local"
     export USE_WWW="n"
     export WP_DB="wp_test"
