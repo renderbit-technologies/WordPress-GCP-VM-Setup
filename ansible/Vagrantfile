@@ -32,7 +32,8 @@ Vagrant.configure("2") do |config|
       use_www: false,
       wp_db_pass: "vagrant",
       wp_admin_pass: "vagrant",
-      admin_email: "admin@vagrant.local"
+      admin_email: "admin@vagrant.local",
+      enable_ssl: false # SSL should not be set while using Vagrant
     }
   end
 end
