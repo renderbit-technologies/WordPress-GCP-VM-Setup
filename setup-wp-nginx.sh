@@ -151,7 +151,7 @@ if [ -f "$CRED_FILE" ]; then
 	WP_DB_PASS=$(awk '/DB password:/{print $3}' "$CRED_FILE")
 	WP_ADMIN_PASS=$(awk '/Password:/{if ($1=="Password:") print $2}' "$CRED_FILE")
 else
-	MYSQL_ROOT_PASS=${MYSQL_ROOT_PASS:-$(openssl rand -base64 18 | tr -d '\n')}
+MYSQL_ROOT_PASS=${MYSQL_ROOT_PASS:-$(openssl rand -base64 18 | tr -d '\n')}
 	WP_ADMIN_PASS=${WP_ADMIN_PASS:-$(openssl rand -base64 18 | tr -d '\n')}
 	WP_DB_PASS=${WP_DB_PASS:-$(openssl rand -base64 18 | tr -d '\n')}
 fi
