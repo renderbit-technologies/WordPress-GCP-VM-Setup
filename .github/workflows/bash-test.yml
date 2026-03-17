@@ -13,13 +13,14 @@ on:
       - '*.sh'
       - 'tests/bash/**'
       - '.github/workflows/bash-test.yml'
+  workflow_dispatch:
 
 jobs:
-  vagrant-test:
-    runs-on: ubuntu-latest
+  macos-vagrant-test:
+    runs-on: macos-15-intel
     permissions:
       contents: read
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v6
 
@@ -30,23 +31,13 @@ jobs:
           key: ${{ runner.os }}-vagrant-${{ hashFiles('tests/bash/Vagrantfile') }}
           restore-keys: ${{ runner.os }}-vagrant-
 
-      - name: Enable KVM
+      - name: Install VirtualBox and Vagrant
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
         run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-
-      - name: Install VirtualBox
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y virtualbox
-
-      - name: Install Vagrant
-        run: |
-          wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
-          echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
-          sudo apt-get update
-          sudo apt-get install -y vagrant
+          brew install --cask virtualbox
+          brew install --cask vagrant
+          VBoxManage --version
           vagrant --version
 
       - name: Run Vagrant Up
@@ -66,3 +57,24 @@ jobs:
           cd tests/bash
           vagrant provision
           vagrant ssh -c 'curl -I -H "Host: vagrant.local" http://localhost'
+
+  hosted-runner-test:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install test prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl mysql-client
+
+      - name: Run hosted runner integration test
+        run: |
+          sudo bash ./tests/bash/run-on-runner.sh initial
+
+      - name: Idempotency Check
+        run: |
+          sudo bash ./tests/bash/run-on-runner.sh idempotency

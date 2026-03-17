@@ -2,6 +2,8 @@
 
 This directory contains a Vagrant environment for testing the bash installation scripts (`setup-swap.sh`, `setup-wp-nginx.sh`).
 
+It also includes `run-on-runner.sh`, a hosted-runner integration harness for GitHub Actions. That path runs the scripts directly on an ephemeral Ubuntu runner and skips Certbot so CI does not depend on nested virtualization or public DNS.
+
 ## Prerequisites
 
 - VirtualBox
@@ -43,6 +45,25 @@ This directory contains a Vagrant environment for testing the bash installation 
    ```bash
    vagrant destroy -f
    ```
+
+## Running the Hosted-Runner Harness Manually
+
+On a disposable Ubuntu 24.04 VM, run:
+
+```bash
+sudo bash tests/bash/run-on-runner.sh initial
+sudo bash tests/bash/run-on-runner.sh idempotency
+```
+
+The harness:
+
+- sets test-only environment variables
+- maps the test domain to `127.0.0.1`
+- runs `setup-swap.sh` and `setup-wp-nginx.sh`
+- verifies HTTP and MariaDB access
+- supports a separate idempotency rerun, mirroring the GitHub Actions workflow
+
+It defaults `SKIP_CERTBOT=y` so the test stays self-contained and does not require public DNS or Let's Encrypt validation.
 
 ## Configuration
 

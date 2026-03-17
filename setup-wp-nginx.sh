@@ -11,6 +11,7 @@ set -euo pipefail
 #   WP_DB_USER        (Optional) Database user [default: wpuser]
 #   LE_EMAIL          (Optional) Admin email [default: admin@$DOMAIN]
 #   ENABLE_FAIL2BAN   (Optional) Enable fail2ban? (y/n) [default: y]
+#   SKIP_CERTBOT      (Optional) Skip TLS provisioning for CI/test runs (y/n) [default: n]
 #   CONT              (Optional) Skip confirmation prompt? (y) [default: y in batch mode]
 
 # -------------------------
@@ -603,19 +604,23 @@ log_success "Weekly update cron created."
 # Certbot (apt) - obtain TLS and configure nginx
 # -------------------------
 log_info "Installing Certbot and Python3-Certbot-Nginx via apt..."
-apt-get install -y certbot python3-certbot-nginx
+if [[ "${SKIP_CERTBOT:-n}" =~ ^[Yy]$ ]]; then
+	log_warn "Skipping Certbot because SKIP_CERTBOT is enabled."
+else
+	apt-get install -y certbot python3-certbot-nginx
 
-CERT_DOMAINS=("-d" "$DOMAIN")
-if [ -n "$WWW_DOMAIN" ]; then CERT_DOMAINS+=("-d" "$WWW_DOMAIN"); fi
+	CERT_DOMAINS=("-d" "$DOMAIN")
+	if [ -n "$WWW_DOMAIN" ]; then CERT_DOMAINS+=("-d" "$WWW_DOMAIN"); fi
 
-log_info "Requesting SSL Certificate. If this fails, check your DNS records!"
-certbot --nginx "${CERT_DOMAINS[@]}" --email "$LE_EMAIL" --agree-tos --no-eff-email --redirect --expand --non-interactive || {
-	log_error "Certbot reported issues. You may need to run it manually."
-}
+	log_info "Requesting SSL Certificate. If this fails, check your DNS records!"
+	certbot --nginx "${CERT_DOMAINS[@]}" --email "$LE_EMAIL" --agree-tos --no-eff-email --redirect --expand --non-interactive || {
+		log_error "Certbot reported issues. You may need to run it manually."
+	}
 
-# Ensure certbot renewal service/timer is enabled
-log_info "Enabling Certbot renewal timer..."
-systemctl enable --now certbot.timer
+	# Ensure certbot renewal service/timer is enabled
+	log_info "Enabling Certbot renewal timer..."
+	systemctl enable --now certbot.timer
+fi
 
 # -------------------------
 # Unattended security updates
