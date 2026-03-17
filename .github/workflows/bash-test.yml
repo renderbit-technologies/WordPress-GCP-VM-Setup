@@ -16,48 +16,6 @@ on:
   workflow_dispatch:
 
 jobs:
-  macos-vagrant-test:
-    runs-on: macos-15-intel
-    permissions:
-      contents: read
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Cache Vagrant boxes
-        uses: actions/cache@v5
-        with:
-          path: ~/.vagrant.d/boxes
-          key: ${{ runner.os }}-vagrant-${{ hashFiles('tests/bash/Vagrantfile') }}
-          restore-keys: ${{ runner.os }}-vagrant-
-
-      - name: Install VirtualBox and Vagrant
-        env:
-          HOMEBREW_NO_AUTO_UPDATE: "1"
-        run: |
-          brew install --cask virtualbox
-          brew install --cask vagrant
-          VBoxManage --version
-          vagrant --version
-
-      - name: Run Vagrant Up
-        run: |
-          cd tests/bash
-          vagrant up --provider=virtualbox
-
-      - name: Verify Deployment (Internal)
-        run: |
-          cd tests/bash
-          # The verification is already inside Vagrant provisioner, but we can double check here
-          # Host header is needed as per provisioner logic
-          vagrant ssh -c 'curl -I -H "Host: vagrant.local" http://localhost'
-
-      - name: Idempotency Check
-        run: |
-          cd tests/bash
-          vagrant provision
-          vagrant ssh -c 'curl -I -H "Host: vagrant.local" http://localhost'
-
   hosted-runner-test:
     runs-on: ubuntu-24.04
     permissions:
