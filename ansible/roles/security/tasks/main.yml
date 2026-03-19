@@ -1,14 +1,14 @@
 ---
 # Unattended Upgrades
 - name: Install unattended-upgrades
-  apt:
+  ansible.builtin.apt:
     name:
       - unattended-upgrades
       - apt-listchanges
     state: present
 
 - name: Configure unattended-upgrades
-  template:
+  ansible.builtin.template:
     src: 50unattended-upgrades.j2
     dest: /etc/apt/apt.conf.d/50unattended-upgrades
     owner: root
@@ -16,7 +16,7 @@
     mode: "0644"
 
 - name: Enable unattended-upgrades
-  copy:
+  ansible.builtin.copy:
     dest: /etc/apt/apt.conf.d/20auto-upgrades
     content: |
       APT::Periodic::Update-Package-Lists "1";
@@ -27,13 +27,13 @@
 
 # Fail2Ban
 - name: Install Fail2Ban
-  apt:
+  ansible.builtin.apt:
     name: fail2ban
     state: present
   when: enable_fail2ban | default(true)
 
 - name: Configure Fail2Ban jail
-  copy:
+  ansible.builtin.copy:
     dest: /etc/fail2ban/jail.local
     content: |
       [DEFAULT]
@@ -53,23 +53,23 @@
   notify: Restart Fail2Ban
 
 - name: Enable and start Fail2Ban
-  service:
+  ansible.builtin.service:
     name: fail2ban
     state: started
-    enabled: yes
+    enabled: true
   when: enable_fail2ban | default(true)
 
 # File permissions hardening
 - name: Set WordPress directory permissions
-  command: find /var/www/{{ domain }} -type d -exec chmod 0775 {} +
+  ansible.builtin.command: find /var/www/{{ domain }} -type d -exec chmod 0775 {} +
   changed_when: false
 
 - name: Set WordPress file permissions
-  command: find /var/www/{{ domain }} -type f -exec chmod 0664 {} +
+  ansible.builtin.command: find /var/www/{{ domain }} -type f -exec chmod 0664 {} +
   changed_when: false
 
 - name: Lock down wp-config.php
-  file:
+  ansible.builtin.file:
     path: /var/www/{{ domain }}/wp-config.php
     owner: www-data
     group: www-data

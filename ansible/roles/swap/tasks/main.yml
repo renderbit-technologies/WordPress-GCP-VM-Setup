@@ -1,26 +1,30 @@
 ---
 - name: Check if swap file exists
-  stat:
+  ansible.builtin.stat:
     path: /swapfile
   register: swap_file_check
 
 - name: Create swap file
-  command: fallocate -l {{ swap_size }} /swapfile
+  ansible.builtin.command: fallocate -l {{ swap_size }} /swapfile
+  args:
+    creates: /swapfile
   when: not swap_file_check.stat.exists
 
 - name: Set permissions on swap file
-  file:
+  ansible.builtin.file:
     path: /swapfile
     mode: '0600'
     owner: root
     group: root
 
 - name: Format swap file
-  command: mkswap /swapfile
+  ansible.builtin.command: mkswap /swapfile
+  changed_when: false
   when: not swap_file_check.stat.exists
 
 - name: Enable swap
-  command: swapon /swapfile
+  ansible.builtin.command: swapon /swapfile
+  changed_when: false
   when: not swap_file_check.stat.exists
   # Or use ansible.posix.mount if you want idempotency via /proc/swaps check,
   # but enabling is usually done via fstab + mount -a or manual swapon.
@@ -29,7 +33,7 @@
   # Ideally check if active: command: swapon --show | grep /swapfile
 
 - name: Add swap to fstab
-  mount:
+  ansible.posix.mount:
     path: none
     src: /swapfile
     fstype: swap
@@ -39,17 +43,17 @@
     state: present
 
 - name: Configure vm.swappiness
-  sysctl:
+  ansible.posix.sysctl:
     name: vm.swappiness
     value: '10'
     state: present
     sysctl_file: /etc/sysctl.conf
-    reload: yes
+    reload: true
 
 - name: Configure vm.vfs_cache_pressure
-  sysctl:
+  ansible.posix.sysctl:
     name: vm.vfs_cache_pressure
     value: '50'
     state: present
     sysctl_file: /etc/sysctl.conf
-    reload: yes
+    reload: true

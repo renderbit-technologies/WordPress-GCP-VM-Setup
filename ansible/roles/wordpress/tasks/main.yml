@@ -3,19 +3,19 @@
 # PPAs and Package Installation
 # --------------------------------------------------------
 - name: Add PHP PPA
-  apt_repository:
+  ansible.builtin.apt_repository:
     repo: "ppa:ondrej/php"
     state: present
-    update_cache: yes
+    update_cache: true
 
 - name: Add Nginx PPA
-  apt_repository:
+  ansible.builtin.apt_repository:
     repo: "ppa:ondrej/nginx"
     state: present
-    update_cache: yes
+    update_cache: true
 
 - name: Install Nginx, PHP 8.3, MariaDB, Certbot
-  apt:
+  ansible.builtin.apt:
     name:
       - nginx
       - mariadb-server
@@ -39,55 +39,55 @@
 # Enable Services
 # --------------------------------------------------------
 - name: Enable and start Nginx
-  service:
+  ansible.builtin.service:
     name: nginx
     state: started
-    enabled: yes
+    enabled: true
 
 - name: Enable and start PHP-FPM
-  service:
+  ansible.builtin.service:
     name: php8.3-fpm
     state: started
-    enabled: yes
+    enabled: true
 
 - name: Enable and start MariaDB
-  service:
+  ansible.builtin.service:
     name: mariadb
     state: started
-    enabled: yes
+    enabled: true
 
 # --------------------------------------------------------
 # PHP-FPM Pool Tuning
 # --------------------------------------------------------
 - name: Gather CPU core count for FPM tuning
-  set_fact:
-    php_cores: "{{ ansible_processor_vcpus | default(1) }}"
+  ansible.builtin.set_fact:
+    wordpress_php_cores: "{{ ansible_processor_vcpus | default(1) }}"
 
 - name: Calculate FPM pool parameters
-  set_fact:
-    fpm_max_children: "{{ [php_cores | int * 5, 5] | max }}"
-    fpm_start_servers: "{{ [php_cores | int * 2, 2] | max }}"
-    fpm_min_spare_servers: "{{ [php_cores | int, 1] | max }}"
-    fpm_max_spare_servers: "{{ [php_cores | int * 3, 3] | max }}"
-    fpm_max_requests: 500
+  ansible.builtin.set_fact:
+    wordpress_fpm_max_children: "{{ [wordpress_php_cores | int * 5, 5] | max }}"
+    wordpress_fpm_start_servers: "{{ [wordpress_php_cores | int * 2, 2] | max }}"
+    wordpress_fpm_min_spare_servers: "{{ [wordpress_php_cores | int, 1] | max }}"
+    wordpress_fpm_max_spare_servers: "{{ [wordpress_php_cores | int * 3, 3] | max }}"
+    wordpress_fpm_max_requests: 500
 
 - name: Tune PHP-FPM pool (pm = dynamic)
-  lineinfile:
+  ansible.builtin.lineinfile:
     path: /etc/php/8.3/fpm/pool.d/www.conf
     regexp: "^{{ item.key }} ="
     line: "{{ item.key }} = {{ item.value }}"
-    backrefs: no
+    backrefs: false
   loop:
     - { key: "pm", value: "dynamic" }
-    - { key: "pm.max_children", value: "{{ fpm_max_children }}" }
-    - { key: "pm.start_servers", value: "{{ fpm_start_servers }}" }
-    - { key: "pm.min_spare_servers", value: "{{ fpm_min_spare_servers }}" }
-    - { key: "pm.max_spare_servers", value: "{{ fpm_max_spare_servers }}" }
-    - { key: "pm.max_requests", value: "{{ fpm_max_requests }}" }
+    - { key: "pm.max_children", value: "{{ wordpress_fpm_max_children }}" }
+    - { key: "pm.start_servers", value: "{{ wordpress_fpm_start_servers }}" }
+    - { key: "pm.min_spare_servers", value: "{{ wordpress_fpm_min_spare_servers }}" }
+    - { key: "pm.max_spare_servers", value: "{{ wordpress_fpm_max_spare_servers }}" }
+    - { key: "pm.max_requests", value: "{{ wordpress_fpm_max_requests }}" }
   notify: Restart PHP-FPM
 
 - name: Ensure FPM listen owner/group is www-data
-  lineinfile:
+  ansible.builtin.lineinfile:
     path: /etc/php/8.3/fpm/pool.d/www.conf
     regexp: "^{{ item.key }} ="
     line: "{{ item.key }} = {{ item.value }}"
@@ -100,7 +100,7 @@
 # PHP.ini Tuning
 # --------------------------------------------------------
 - name: Tune php.ini for FPM
-  lineinfile:
+  ansible.builtin.lineinfile:
     path: /etc/php/8.3/fpm/php.ini
     regexp: "^;?{{ item.key }} ="
     line: "{{ item.key }} = {{ item.value }}"
@@ -117,7 +117,7 @@
 # OPcache Configuration
 # --------------------------------------------------------
 - name: Configure OPcache
-  template:
+  ansible.builtin.template:
     src: opcache.ini.j2
     dest: /etc/php/8.3/mods-available/opcache.ini
     owner: root
@@ -129,63 +129,66 @@
 # phpMyAdmin Installation
 # --------------------------------------------------------
 - name: Check if phpMyAdmin is installed
-  stat:
+  ansible.builtin.stat:
     path: /usr/share/phpmyadmin
-  register: pma_check
+  register: wordpress_pma_check
 
 - name: Download phpMyAdmin
-  get_url:
+  ansible.builtin.get_url:
     url: https://www.phpmyadmin.net/downloads/phpMyAdmin-latest-all-languages.zip
     dest: /tmp/pma.zip
     mode: "0644"
-  when: not pma_check.stat.exists
+  when: not wordpress_pma_check.stat.exists
 
 - name: Unzip phpMyAdmin
-  unarchive:
+  ansible.builtin.unarchive:
     src: /tmp/pma.zip
     dest: /tmp/
-    remote_src: yes
-  when: not pma_check.stat.exists
+    remote_src: true
+  when: not wordpress_pma_check.stat.exists
 
 - name: Find phpMyAdmin extracted directory
-  find:
+  ansible.builtin.find:
     paths: /tmp
     patterns: "phpMyAdmin-*-all-languages"
     file_type: directory
-  register: pma_dir
-  when: not pma_check.stat.exists
+  register: wordpress_pma_dir
+  when: not wordpress_pma_check.stat.exists
 
 - name: Move phpMyAdmin to /usr/share/phpmyadmin
-  command: "mv {{ pma_dir.files[0].path }} /usr/share/phpmyadmin"
-  when: not pma_check.stat.exists and pma_dir.files | length > 0
+  ansible.builtin.command: "mv {{ wordpress_pma_dir.files[0].path }} /usr/share/phpmyadmin"
+  args:
+    creates: /usr/share/phpmyadmin/index.php
+  changed_when: true
+  when: not wordpress_pma_check.stat.exists and wordpress_pma_dir.files | length > 0
 
 - name: Copy phpMyAdmin sample config
-  copy:
+  ansible.builtin.copy:
     src: /usr/share/phpmyadmin/config.sample.inc.php
     dest: /usr/share/phpmyadmin/config.inc.php
-    remote_src: yes
+    remote_src: true
     owner: www-data
     group: www-data
     mode: "0640"
-    force: no # Don't overwrite if already configured
+    force: false # Don't overwrite if already configured
 
 - name: Inject blowfish secret into phpMyAdmin config
-  replace:
+  ansible.builtin.replace:
     path: /usr/share/phpmyadmin/config.inc.php
     regexp: "\\$cfg\\['blowfish_secret'\\] = '';"
     replace: "$cfg['blowfish_secret'] = '{{ pma_blowfish }}';"
 
 - name: Set phpMyAdmin ownership
-  file:
+  ansible.builtin.file:
     path: /usr/share/phpmyadmin
     state: directory
     owner: www-data
     group: www-data
     mode: "0755"
-    recurse: yes
+    recurse: true
 
 - name: Create phpMyAdmin tmp directory
-  file:
+  ansible.builtin.file:
     path: /usr/share/phpmyadmin/tmp
     state: directory
     owner: www-data
@@ -193,7 +196,7 @@
     mode: "0777"
 
 - name: Clean up phpMyAdmin zip
-  file:
+  ansible.builtin.file:
     path: /tmp/pma.zip
     state: absent
 
@@ -218,17 +221,17 @@
 - name: Remove anonymous MySQL users
   community.mysql.mysql_user:
     name: ""
-    host_all: yes
+    host_all: true
     state: absent
     login_unix_socket: /var/run/mysqld/mysqld.sock
-  ignore_errors: yes
+  failed_when: false
 
 - name: Drop test database
   community.mysql.mysql_db:
     name: test
     state: absent
     login_unix_socket: /var/run/mysqld/mysqld.sock
-  ignore_errors: yes
+  failed_when: false
 
 - name: Set MariaDB root password
   community.mysql.mysql_user:
@@ -236,11 +239,11 @@
     password: "{{ mysql_root_pass }}"
     host: localhost
     login_unix_socket: /var/run/mysqld/mysqld.sock
-  ignore_errors: yes
+  failed_when: false
 
 
 - name: Create .my.cnf for root
-  template:
+  ansible.builtin.template:
     src: root-my.cnf.j2
     dest: /root/.my.cnf
     owner: root
@@ -250,7 +253,7 @@
 # Install WP-CLI
 # --------------------------------------------------------
 - name: Install WP-CLI
-  get_url:
+  ansible.builtin.get_url:
     url: https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
     dest: /usr/local/bin/wp
     mode: "0755"
@@ -259,7 +262,7 @@
 # Nginx Configuration
 # --------------------------------------------------------
 - name: Create Web Root
-  file:
+  ansible.builtin.file:
     path: /var/www/{{ domain }}
     state: directory
     owner: www-data
@@ -267,7 +270,7 @@
     mode: "0775"
 
 - name: Deploy Nginx security headers snippet
-  template:
+  ansible.builtin.template:
     src: security-headers.conf.j2
     dest: /etc/nginx/snippets/security-headers.conf
     owner: root
@@ -276,7 +279,7 @@
   notify: Restart Nginx
 
 - name: Deploy Nginx site configuration
-  template:
+  ansible.builtin.template:
     src: nginx-site.conf.j2
     dest: /etc/nginx/sites-available/{{ domain }}
     owner: root
@@ -285,14 +288,14 @@
   notify: Restart Nginx
 
 - name: Enable Nginx Site
-  file:
+  ansible.builtin.file:
     src: /etc/nginx/sites-available/{{ domain }}
     dest: /etc/nginx/sites-enabled/{{ domain }}
     state: link
   notify: Restart Nginx
 
 - name: Remove Default Nginx Site
-  file:
+  ansible.builtin.file:
     path: /etc/nginx/sites-enabled/default
     state: absent
   notify: Restart Nginx
@@ -301,18 +304,22 @@
 # WordPress Download, Config & Install
 # --------------------------------------------------------
 - name: Check if WP is installed
-  stat:
+  ansible.builtin.stat:
     path: /var/www/{{ domain }}/wp-config.php
-  register: wp_config_check
+  register: wordpress_wp_config_check
 
 - name: Download WordPress
+  become: true
   become_user: www-data
-  shell: wp core download --path=/var/www/{{ domain }} --skip-content --force
-  when: not wp_config_check.stat.exists
+  ansible.builtin.command: wp core download --path=/var/www/{{ domain }} --skip-content --force
+  args:
+    creates: /var/www/{{ domain }}/wp-settings.php
+  when: not wordpress_wp_config_check.stat.exists
 
 - name: Configure WordPress
+  become: true
   become_user: www-data
-  shell: |
+  ansible.builtin.shell: |
     wp config create \
     --dbname={{ wp_db_name }} \
     --dbuser={{ wp_db_user }} \
@@ -320,11 +327,14 @@
     --locale=en_US \
     --path=/var/www/{{ domain }} \
     --force
-  when: not wp_config_check.stat.exists
+  args:
+    creates: /var/www/{{ domain }}/wp-config.php
+  when: not wordpress_wp_config_check.stat.exists
 
 - name: Install WordPress
+  become: true
   become_user: www-data
-  shell: |
+  ansible.builtin.shell: |
     wp core install \
     --url=http://{{ domain }} \
     --title="{{ domain }}" \
@@ -333,14 +343,15 @@
     --admin_email={{ admin_email }} \
     --path=/var/www/{{ domain }} \
     --skip-email
-  when: not wp_config_check.stat.exists
-  ignore_errors: yes
+  changed_when: false
+  when: not wordpress_wp_config_check.stat.exists
+  failed_when: false
 
 # --------------------------------------------------------
 # wp-config.php Security Injections
 # --------------------------------------------------------
 - name: Inject security settings into wp-config.php
-  blockinfile:
+  ansible.builtin.blockinfile:
     path: /var/www/{{ domain }}/wp-config.php
     insertbefore: "require_once ABSPATH . 'wp-settings.php';"
     marker: "/* {mark} ANSIBLE MANAGED SECURITY BLOCK */"
@@ -360,7 +371,7 @@
 # XML-RPC MU-Plugin
 # --------------------------------------------------------
 - name: Create MU-plugins directory
-  file:
+  ansible.builtin.file:
     path: /var/www/{{ domain }}/wp-content/mu-plugins
     state: directory
     owner: www-data
@@ -368,7 +379,7 @@
     mode: "0775"
 
 - name: Deploy XML-RPC mitigation MU-plugin
-  copy:
+  ansible.builtin.copy:
     src: disable-xmlrpc-pingback.php
     dest: /var/www/{{ domain }}/wp-content/mu-plugins/disable-xmlrpc-pingback.php
     owner: www-data
@@ -379,7 +390,7 @@
 # Remove Version Info Files
 # --------------------------------------------------------
 - name: Remove readme.html and license.txt
-  file:
+  ansible.builtin.file:
     path: "/var/www/{{ domain }}/{{ item }}"
     state: absent
   loop:
@@ -390,30 +401,35 @@
 # Remove Default Admin User & Set Roles
 # --------------------------------------------------------
 - name: Check if default admin user exists
+  become: true
   become_user: www-data
-  shell: wp user get admin --field=ID --path=/var/www/{{ domain }}
-  register: admin_user_check
-  ignore_errors: yes
+  ansible.builtin.command: wp user get admin --field=ID --path=/var/www/{{ domain }}
+  register: wordpress_admin_user_check
+  failed_when: false
   changed_when: false
 
 - name: Remove default admin user
+  become: true
   become_user: www-data
-  shell: "wp user delete admin --reassign={{ wp_admin_user }} --path=/var/www/{{ domain }}"
-  when: admin_user_check.rc == 0
-  ignore_errors: yes
+  ansible.builtin.command: "wp user delete admin --reassign={{ wp_admin_user }} --path=/var/www/{{ domain }}"
+  changed_when: wordpress_admin_user_check.rc == 0
+  when: wordpress_admin_user_check.rc == 0
+  failed_when: false
 
 - name: Ensure admin user has administrator role
+  become: true
   become_user: www-data
-  shell: "wp user set-role {{ wp_admin_user }} administrator --path=/var/www/{{ domain }}"
-  ignore_errors: yes
+  ansible.builtin.command: "wp user set-role {{ wp_admin_user }} administrator --path=/var/www/{{ domain }}"
+  failed_when: false
   changed_when: false
 
 # --------------------------------------------------------
 # Install Essential Plugins
 # --------------------------------------------------------
 - name: Install essential WordPress plugins
+  become: true
   become_user: www-data
-  shell: |
+  ansible.builtin.shell: |
     wp plugin install \
     jetpack \
     akismet \
@@ -428,28 +444,31 @@
     updraftplus \
     better-search-replace \
     --path=/var/www/{{ domain }}
-  ignore_errors: yes
+  changed_when: false
+  failed_when: false
 
 # --------------------------------------------------------
 # Enable Plugin/Theme Auto-Updates
 # --------------------------------------------------------
 - name: Enable plugin auto-updates
+  become: true
   become_user: www-data
-  shell: "wp plugin auto-updates enable --all --path=/var/www/{{ domain }}"
-  ignore_errors: yes
+  ansible.builtin.command: "wp plugin auto-updates enable --all --path=/var/www/{{ domain }}"
+  failed_when: false
   changed_when: false
 
 - name: Enable theme auto-updates
+  become: true
   become_user: www-data
-  shell: "wp theme auto-updates enable --all --path=/var/www/{{ domain }}"
-  ignore_errors: yes
+  ansible.builtin.command: "wp theme auto-updates enable --all --path=/var/www/{{ domain }}"
+  failed_when: false
   changed_when: false
 
 # --------------------------------------------------------
 # Weekly WP Update Cron Job
 # --------------------------------------------------------
 - name: Deploy weekly WP update cron script
-  template:
+  ansible.builtin.template:
     src: wp-updates.sh.j2
     dest: /etc/cron.weekly/wp-updates
     owner: root
@@ -460,46 +479,46 @@
 # SSL via Certbot (conditional)
 # --------------------------------------------------------
 - name: Run Certbot to obtain SSL certificate
-  command: >
+  ansible.builtin.command: >
     certbot --nginx -d {{ domain }}{% if use_www %} -d www.{{ domain }}{% endif %}
     --non-interactive --agree-tos -m {{ admin_email }} --redirect --expand
   args:
     creates: /etc/letsencrypt/live/{{ domain }}/fullchain.pem
   when: enable_ssl | default(true)
-  ignore_errors: yes
+  failed_when: false
 
 - name: Enable Certbot renewal timer
-  service:
+  ansible.builtin.service:
     name: certbot.timer
     state: started
-    enabled: yes
+    enabled: true
   when: enable_ssl | default(true)
-  ignore_errors: yes
+  failed_when: false
 
 # --------------------------------------------------------
 # File Permissions (Final Pass)
 # --------------------------------------------------------
 - name: Set WordPress directory ownership
-  file:
+  ansible.builtin.file:
     path: /var/www/{{ domain }}
     state: directory
     owner: www-data
     group: www-data
-    recurse: yes
+    recurse: true
 
 - name: Lock wp-config.php
-  file:
+  ansible.builtin.file:
     path: /var/www/{{ domain }}/wp-config.php
     owner: www-data
     group: www-data
     mode: "0640"
-  ignore_errors: yes
+  failed_when: false
 
 # --------------------------------------------------------
 # Save Credentials
 # --------------------------------------------------------
 - name: Save credentials to file
-  template:
+  ansible.builtin.template:
     src: wp-credentials.j2
     dest: /root/.wp-credentials
     owner: root
@@ -507,7 +526,7 @@
     mode: "0600"
 
 - name: Display generated credentials
-  debug:
+  ansible.builtin.debug:
     msg: |
       ===================================================================
       WordPress + phpMyAdmin installation complete for: {{ domain }}

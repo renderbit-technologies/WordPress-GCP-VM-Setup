@@ -1,21 +1,22 @@
 ---
-- hosts: all
-  become: yes
+- name: Setup WordPress on GCP VM
+  hosts: all
+  become: true
 
   vars_prompt:
     - name: wp_db_pass
       prompt: "WordPress DB password (leave blank to auto-generate)"
-      private: yes
+      private: true
       default: ""
 
     - name: wp_admin_pass
       prompt: "WordPress admin password (leave blank to auto-generate)"
-      private: yes
+      private: true
       default: ""
 
     - name: mysql_root_pass
       prompt: "MySQL root password (leave blank to auto-generate)"
-      private: yes
+      private: true
       default: ""
 
   vars:
@@ -32,25 +33,25 @@
 
   pre_tasks:
     - name: Auto-generate wp_db_pass if not provided
-      set_fact:
+      ansible.builtin.set_fact:
         wp_db_pass: "{{ lookup('password', '/dev/null length=24 chars=ascii_letters,digits') }}"
       when: wp_db_pass | length == 0
       no_log: true
 
     - name: Auto-generate wp_admin_pass if not provided
-      set_fact:
+      ansible.builtin.set_fact:
         wp_admin_pass: "{{ lookup('password', '/dev/null length=24 chars=ascii_letters,digits') }}"
       when: wp_admin_pass | length == 0
       no_log: true
 
     - name: Auto-generate mysql_root_pass if not provided
-      set_fact:
+      ansible.builtin.set_fact:
         mysql_root_pass: "{{ lookup('password', '/dev/null length=24 chars=ascii_letters,digits') }}"
       when: mysql_root_pass | length == 0
       no_log: true
 
     - name: Generate phpMyAdmin blowfish secret
-      set_fact:
+      ansible.builtin.set_fact:
         pma_blowfish: "{{ lookup('password', '/dev/null length=32 chars=ascii_letters,digits,special') }}"
       no_log: true
 
