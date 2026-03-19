@@ -2,15 +2,15 @@ name: Ansible Playbook Test
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
     paths:
-      - 'ansible/**'
-      - '.github/workflows/ansible-test.yml'
+      - "ansible/**"
+      - ".github/workflows/ansible-test.yml"
   pull_request:
-    branches: [ main ]
+    branches: [main]
     paths:
-      - 'ansible/**'
-      - '.github/workflows/ansible-test.yml'
+      - "ansible/**"
+      - ".github/workflows/ansible-test.yml"
 
 jobs:
   vagrant-test:
@@ -57,6 +57,7 @@ jobs:
       - name: Syntax Check
         run: |
           cd ansible
+          cp inventory.ini.example inventory.ini
           ansible-playbook playbook.yml --syntax-check
 
       - name: Run Vagrant Up
