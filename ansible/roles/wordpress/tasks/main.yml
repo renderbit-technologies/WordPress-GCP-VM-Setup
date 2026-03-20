@@ -14,23 +14,23 @@
     state: present
     update_cache: true
 
-- name: Install Nginx, PHP 8.3, MariaDB, Certbot
+- name: Install Nginx, PHP 8.4, MariaDB, Certbot
   ansible.builtin.apt:
     name:
       - nginx
       - mariadb-server
-      - php8.3
-      - php8.3-fpm
-      - php8.3-cli
-      - php8.3-mysql
-      - php8.3-xml
-      - php8.3-curl
-      - php8.3-mbstring
-      - php8.3-zip
-      - php8.3-gd
-      - php8.3-intl
-      - php8.3-opcache
-      - php8.3-imagick
+      - php8.4
+      - php8.4-fpm
+      - php8.4-cli
+      - php8.4-mysql
+      - php8.4-xml
+      - php8.4-curl
+      - php8.4-mbstring
+      - php8.4-zip
+      - php8.4-gd
+      - php8.4-intl
+      - php8.4-opcache
+      - php8.4-imagick
       - certbot
       - python3-certbot-nginx
     state: present
@@ -46,7 +46,7 @@
 
 - name: Enable and start PHP-FPM
   ansible.builtin.service:
-    name: php8.3-fpm
+    name: php8.4-fpm
     state: started
     enabled: true
 

@@ -30,7 +30,7 @@ This is the main role and handles everything from packages to a working WordPres
 #### Package Installation
 
 - Adds Ondrej PPAs for PHP and Nginx.
-- Installs Nginx, MariaDB, PHP 8.3 (FPM, CLI, and extensions: mysql, xml, curl, mbstring, zip, gd, intl, opcache, imagick), Certbot with Nginx plugin.
+- Installs Nginx, MariaDB, PHP 8.4 (FPM, CLI, and extensions: mysql, xml, curl, mbstring, zip, gd, intl, opcache, imagick), Certbot with Nginx plugin.
 
 #### PHP-FPM Tuning
 
