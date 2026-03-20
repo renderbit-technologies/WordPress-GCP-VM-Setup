@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find .cursor .github -name *.md -o -name rules)",
+      "Bash(cat .github/instructions/*.md)",
+      "Bash(head -30 setup-*.sh)"
+    ]
+  }
+}
