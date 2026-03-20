@@ -444,7 +444,7 @@ def extract_failure_snippet(log_text: str, max_lines: int, context: int) -> str:
 
 def find_failure_index(lines: Sequence[str]) -> int | None:
     for idx in range(len(lines) - 1, -1, -1):
-        if FAILURE_REGEX.search(lines[idx].lower()):
+        if FAILURE_REGEX.pattern and FAILURE_REGEX.search(lines[idx].lower()):
             return idx
     return None
 
