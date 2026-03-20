@@ -6,3 +6,6 @@ ansible/inventory.ini
 
 # Ignore vscode AI rules
 .github/instructions/codacy.instructions.md
+
+# Logs
+firebase-debug.log
