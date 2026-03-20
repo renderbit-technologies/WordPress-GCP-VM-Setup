@@ -14,7 +14,7 @@ on:
 
 jobs:
   vagrant-test:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     timeout-minutes: 30
