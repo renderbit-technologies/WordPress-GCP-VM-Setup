@@ -3,6 +3,7 @@
 **WordPress GCP VM Setup** is a project containing automated, production-ready bash scripts and Ansible playbooks designed to deploy a high-performance, hardened WordPress stack on Google Cloud Platform (or any VM) running **Ubuntu 24.04 LTS**.
 
 The deployed stack consists of:
+
 - **Web Server:** Nginx (Ondrej PPA)
 - **PHP:** 8.3 FPM (tuned to available CPU cores with OPcache enabled)
 - **Database:** MariaDB with root hardening and a dedicated WP user
@@ -18,7 +19,9 @@ The deployed stack consists of:
 There are two primary ways to deploy the stack:
 
 ### 1. Shell Scripts (`install.sh`, `setup-swap.sh`, `setup-wp-nginx.sh`)
+
 The entry point is `install.sh`. It can be run interactively or non-interactively using environment variables.
+
 ```bash
 # Non-interactive example
 export DOMAIN="example.com" USE_WWW="y" ENABLE_FAIL2BAN="y" CONT="y"
@@ -26,9 +29,12 @@ sudo bash install.sh
 ```
 
 ### 2. Ansible Playbook (`ansible/playbook.yml`)
+
 Provides an idempotent and repeatable deployment.
+
 1. Update `ansible/inventory.ini` with target IP and credentials.
 2. Run the playbook:
+
 ```bash
 cd ansible
 ansible-playbook -i inventory.ini playbook.yml --extra-vars "domain=example.com use_www=true enable_ssl=true"
@@ -37,8 +43,10 @@ ansible-playbook -i inventory.ini playbook.yml --extra-vars "domain=example.com 
 ## Testing
 
 Local testing is facilitated via Vagrant, utilizing disposable VirtualBox VMs.
+
 - **Bash Scripts Testing:** Found in `tests/bash/`.
 - **Ansible Playbook Testing:** Found in `ansible/`.
+
   ```bash
   cd ansible
   vagrant up
