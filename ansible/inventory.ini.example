@@ -6,3 +6,14 @@ ansible_user=vagrant
 ansible_ssh_pass=vagrant
 # If using ssh key, uncomment:
 # ansible_ssh_private_key_file=.vagrant/machines/default/virtualbox/private_key
+
+# --- Playbook Variables ---
+domain=example.com
+use_www=true
+enable_ssl=true
+enable_fail2ban=true
+wp_db_name=wpdb
+wp_db_user=wpuser
+wp_admin_user=admin
+admin_email=admin@example.com
+swap_size=2G
