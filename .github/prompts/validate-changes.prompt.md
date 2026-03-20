@@ -80,13 +80,16 @@ Execution rules:
 Return the result in this format:
 
 ## Validation Summary
+
 - Scope: ...
 - Routed checks: ...
 
 ## Results
+
 - Passed: ...
 - Failed: ...
 - Skipped: ...
 
 ## Notes
+
 - Mention missing tools, environment limitations, or follow-up actions.
