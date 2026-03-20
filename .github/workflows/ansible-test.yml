@@ -19,7 +19,8 @@ jobs:
       contents: read
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout code
+        uses: actions/checkout@v6
 
       - name: Cache Vagrant boxes
         uses: actions/cache@v5
@@ -27,7 +28,6 @@ jobs:
           path: ~/.vagrant.d/boxes
           key: ${{ runner.os }}-vagrant-${{ hashFiles('ansible/Vagrantfile') }}
           restore-keys: ${{ runner.os }}-vagrant-
-
 
       - name: Install VirtualBox
         run: |
@@ -49,13 +49,13 @@ jobs:
           ansible --version
           ansible-galaxy collection install community.mysql
 
-      - name: Syntax Check
+      - name: Syntax check
         run: |
           cd ansible
           cp inventory.ini.example inventory.ini
           ansible-playbook playbook.yml --syntax-check
 
-      - name: Run Vagrant Up
+      - name: Run vagrant up
         run: |
           cd ansible
           # GitHub Actions runners might not support hardware virtualization for VirtualBox well.
@@ -65,12 +65,12 @@ jobs:
           sudo rmmod kvm || true
           vagrant up --provider=virtualbox
 
-      - name: Verify Deployment (Internal)
+      - name: Verify deployment (internal)
         run: |
           cd ansible
           vagrant ssh -c "curl -I http://localhost"
 
-      - name: Idempotency Check
+      - name: Idempotency check
         run: |
           cd ansible
           vagrant provision

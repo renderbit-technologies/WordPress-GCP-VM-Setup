@@ -2,20 +2,20 @@ name: Bash Scripts Test (Vagrant)
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
     paths:
-      - '*.sh'
-      - 'tests/bash/**'
-      - '.github/workflows/bash-test.yml'
+      - "*.sh"
+      - "tests/bash/**"
+      - ".github/workflows/bash-test.yml"
   pull_request:
-    branches: [ main ]
+    branches: [main]
     paths:
-      - '*.sh'
-      - 'tests/bash/**'
-      - '.github/workflows/bash-test.yml'
+      - "*.sh"
+      - "tests/bash/**"
+      - ".github/workflows/bash-test.yml"
   workflow_dispatch:
   schedule:
-    - cron: '15 2 * * *'
+    - cron: "15 2 * * *"
 
 jobs:
   vagrant-test:
@@ -24,7 +24,8 @@ jobs:
       contents: read
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout code
+        uses: actions/checkout@v6
 
       - name: Cache Vagrant boxes
         uses: actions/cache@v5
@@ -32,7 +33,6 @@ jobs:
           path: ~/.vagrant.d/boxes
           key: ${{ runner.os }}-vagrant-${{ hashFiles('tests/bash/Vagrantfile') }}
           restore-keys: ${{ runner.os }}-vagrant-
-
 
       - name: Install VirtualBox
         run: |
@@ -48,7 +48,7 @@ jobs:
           sudo apt-get install -y vagrant
           vagrant --version
 
-      - name: Run Vagrant Up
+      - name: Run vagrant up
         run: |
           cd tests/bash
           # GitHub Actions runners might not support hardware virtualization for VirtualBox well.
@@ -58,14 +58,14 @@ jobs:
           sudo rmmod kvm || true
           vagrant up --provider=virtualbox
 
-      - name: Verify Deployment (Internal)
+      - name: Verify deployment (internal)
         run: |
           cd tests/bash
           # The verification is already inside Vagrant provisioner, but we can double check here
           # Host header is needed as per provisioner logic
           vagrant ssh -c 'curl -I -H "Host: vagrant.local" http://localhost'
 
-      - name: Idempotency Check
+      - name: Idempotency check
         run: |
           cd tests/bash
           vagrant provision
