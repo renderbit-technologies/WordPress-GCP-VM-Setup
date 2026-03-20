@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "github-issue-creator": {
+      "source": "microsoft/agent-skills",
+      "sourceType": "github",
+      "computedHash": "1d19ed1e52436c28746d35f53113050d09b79c090a8bd3a6148b4570a3531374"
+    }
+  }
+}
