@@ -73,7 +73,7 @@
 
 - name: Tune PHP-FPM pool (pm = dynamic)
   ansible.builtin.lineinfile:
-    path: /etc/php/8.3/fpm/pool.d/www.conf
+    path: /etc/php/8.4/fpm/pool.d/www.conf
     regexp: "^{{ item.key }} ="
     line: "{{ item.key }} = {{ item.value }}"
     backrefs: false
@@ -88,7 +88,7 @@
 
 - name: Ensure FPM listen owner/group is www-data
   ansible.builtin.lineinfile:
-    path: /etc/php/8.3/fpm/pool.d/www.conf
+    path: /etc/php/8.4/fpm/pool.d/www.conf
     regexp: "^{{ item.key }} ="
     line: "{{ item.key }} = {{ item.value }}"
   loop:
@@ -101,7 +101,7 @@
 # --------------------------------------------------------
 - name: Tune php.ini for FPM
   ansible.builtin.lineinfile:
-    path: /etc/php/8.3/fpm/php.ini
+    path: /etc/php/8.4/fpm/php.ini
     regexp: "^;?{{ item.key }} ="
     line: "{{ item.key }} = {{ item.value }}"
   loop:
@@ -119,7 +119,7 @@
 - name: Configure OPcache
   ansible.builtin.template:
     src: opcache.ini.j2
-    dest: /etc/php/8.3/mods-available/opcache.ini
+    dest: /etc/php/8.4/mods-available/opcache.ini
     owner: root
     group: root
     mode: "0644"

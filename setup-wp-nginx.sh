@@ -202,7 +202,7 @@ PM_MAX_REQUESTS=500
 log_info "Pool Sizing: Cores=$CORES | Max Children=$MAX_CHILDREN"
 
 # Update FPM pool config
-FPM_POOL_CONF="/etc/php/8.3/fpm/pool.d/www.conf"
+FPM_POOL_CONF="/etc/php/8.4/fpm/pool.d/www.conf"
 if [ -f "$FPM_POOL_CONF" ]; then
 	sed -i "s/^pm = .*/pm = dynamic/" "$FPM_POOL_CONF" || true
 	sed -i "s/^pm.max_children = .*/pm.max_children = ${MAX_CHILDREN}/" "$FPM_POOL_CONF" || true
@@ -218,7 +218,7 @@ if [ -f "$FPM_POOL_CONF" ]; then
 fi
 
 # Tune php.ini (FPM)
-PHP_FPM_INI="/etc/php/8.3/fpm/php.ini"
+PHP_FPM_INI="/etc/php/8.4/fpm/php.ini"
 if [ -f "$PHP_FPM_INI" ]; then
 	# sensible values for WordPress
 	sed -i "s/^memory_limit = .*/memory_limit = 256M/" "$PHP_FPM_INI" || true
@@ -231,7 +231,7 @@ fi
 
 # Configure OPcache for performance
 log_info "Configuring OPcache..."
-OPCACHE_CONF="/etc/php/8.3/mods-available/opcache.ini"
+OPCACHE_CONF="/etc/php/8.4/mods-available/opcache.ini"
 cat >"$OPCACHE_CONF" <<'OPC'
 ; Enable OPcache
 opcache.enable=1
