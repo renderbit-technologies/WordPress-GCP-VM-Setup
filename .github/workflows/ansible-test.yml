@@ -64,7 +64,10 @@ jobs:
         run: |
           cd ansible
           # GitHub Actions runners might not support hardware virtualization for VirtualBox well.
-          # But we try.
+          # Unload KVM modules that block VirtualBox from accessing AMD-V/VT-x
+          sudo rmmod kvm_amd || true
+          sudo rmmod kvm_intel || true
+          sudo rmmod kvm || true
           vagrant up --provider=virtualbox
 
       - name: Verify Deployment (Internal)
