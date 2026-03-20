@@ -13,9 +13,12 @@ DOMAIN="${DOMAIN:-runner.local}"
 
 append_host_entry() {
 	local host_name=$1
+	local hosts_file=${2:-/etc/hosts}
+	local escaped_host_name
+	escaped_host_name=$(echo "${host_name}" | sed 's/\./\\./g')
 
-	if ! grep -Eq "^[[:space:]]*127\\.0\\.0\\.1[[:space:]].*\\b${host_name}\\b" /etc/hosts; then
-		echo "127.0.0.1 ${host_name}" >>/etc/hosts
+	if ! grep -Eq "^[[:space:]]*127\\.0\\.0\\.1([[:space:]]+|.*[[:space:]]+)${escaped_host_name}([[:space:]]|$)" "${hosts_file}"; then
+		echo "127.0.0.1 ${host_name}" >>"${hosts_file}"
 	fi
 }
 
