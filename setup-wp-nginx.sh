@@ -274,9 +274,7 @@ chmod 0755 "$PMA_ROOT"
 chmod 640 "$PMA_ROOT/config.inc.php"
 
 # Create a temp directory for PMA to use
-mkdir -p "$PMA_ROOT/tmp"
-chown www-data:www-data "$PMA_ROOT/tmp"
-chmod 750 "$PMA_ROOT/tmp"
+install -d -o www-data -g www-data -m 750 "$PMA_ROOT/tmp"
 
 log_success "phpMyAdmin installed."
 
