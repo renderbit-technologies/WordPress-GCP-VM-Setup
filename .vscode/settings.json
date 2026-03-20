@@ -1,3 +1,5 @@
 {
-    "snyk.advanced.autoSelectOrganization": true
+    "snyk.advanced.autoSelectOrganization": true,
+    "snyk.advanced.organization": "6f5cbbe1-54a5-4dc0-a534-c1962ba4ecaf",
+    "ansible.mcpServer.enabled": true
 }
