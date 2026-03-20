@@ -467,11 +467,12 @@ fi
 # -------------------------
 # Inject Security/SSL settings
 # -------------------------
-log_info "Injecting Security Hardening into wp-config.php..."
+if ! grep -q "SSL/Reverse Proxy Fix (added by installer)" "$WP_CONFIG"; then
+    log_info "Injecting Security Hardening into wp-config.php..."
 
-# Use sed to insert constants BEFORE the 'require_once' line so they take effect.
-# This avoids the "Strange wp-config.php" error by ensuring wp-settings.php is loaded last.
-sed -i "/require_once ABSPATH . 'wp-settings.php';/i \\
+    # Use sed to insert constants BEFORE the 'require_once' line so they take effect.
+    # This avoids the "Strange wp-config.php" error by ensuring wp-settings.php is loaded last.
+    sed -i "/require_once ABSPATH . 'wp-settings.php';/i \\
 \\
 /** SSL/Reverse Proxy Fix (added by installer) */\\
 if (isset(\$_SERVER['HTTP_X_FORWARDED_PROTO']) && \$_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') {\\
@@ -483,6 +484,9 @@ define('FS_METHOD', 'direct');\\
 define('DISALLOW_FILE_EDIT', true);\\
 define('WP_AUTO_UPDATE_CORE', 'minor'); // Updated to 'minor' per request\\
 if ( ! defined('FORCE_SSL_ADMIN') ) define('FORCE_SSL_ADMIN', true);" "$WP_CONFIG"
+else
+    log_info "Security Hardening already present in wp-config.php. Skipping."
+fi
 
 # -------------------------
 # Create MU-plugin for XML-RPC mitigation
