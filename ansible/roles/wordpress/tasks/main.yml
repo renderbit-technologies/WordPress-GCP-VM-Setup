@@ -193,7 +193,7 @@
     state: directory
     owner: www-data
     group: www-data
-    mode: "0777"
+    mode: "0750"
 
 - name: Clean up phpMyAdmin zip
   ansible.builtin.file:
