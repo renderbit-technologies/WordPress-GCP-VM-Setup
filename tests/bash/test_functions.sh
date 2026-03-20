@@ -30,7 +30,7 @@ assert_count() {
 	local pattern=$2
 	local expected=$3
 	local count
-	count=$(grep -c "$pattern" "$file" || echo 0)
+count=$(grep -c "$pattern" "$file" || true)
 	if [ "$count" -ne "$expected" ]; then
 		echo "Assertion failed: $file contains '$pattern' $count times, expected $expected"
 		cat "$file"
