@@ -58,6 +58,9 @@ jobs:
       - name: Run vagrant up
         run: |
           cd ansible
+          sudo rmmod kvm_amd || true
+          sudo rmmod kvm_intel || true
+          sudo rmmod kvm || true
           vagrant up --provider=virtualbox
 
       - name: Verify deployment (internal)
