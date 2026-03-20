@@ -2,13 +2,13 @@ engines:
   trivy:
     enabled: true
     patterns:
-      - VULN_OS
-      - VULN_DEP
-      - VULN_APP
-      - CVE
+    - VULN_OS
+    - VULN_DEP
+    - VULN_APP
+    - CVE
     severities:
-      - HIGH
-      - CRITICAL
+    - HIGH
+    - CRITICAL
     config:
       allow-unfixed: false
 
@@ -27,4 +27,5 @@ exclude_paths:
 
 analysis:
   languages:
-    - Shell
+  - Shell
+  - Ansible
