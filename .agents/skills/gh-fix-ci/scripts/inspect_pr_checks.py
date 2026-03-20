@@ -39,6 +39,7 @@ FAILURE_MARKERS = (
     "timeout",
     "segmentation fault",
 )
+FAILURE_REGEX = re.compile("|".join(map(re.escape, FAILURE_MARKERS)))
 
 DEFAULT_MAX_LINES = 160
 DEFAULT_CONTEXT_LINES = 30
@@ -443,8 +444,7 @@ def extract_failure_snippet(log_text: str, max_lines: int, context: int) -> str:
 
 def find_failure_index(lines: Sequence[str]) -> int | None:
     for idx in range(len(lines) - 1, -1, -1):
-        lowered = lines[idx].lower()
-        if any(marker in lowered for marker in FAILURE_MARKERS):
+        if FAILURE_REGEX.pattern and FAILURE_REGEX.search(lines[idx].lower()):
             return idx
     return None
 
