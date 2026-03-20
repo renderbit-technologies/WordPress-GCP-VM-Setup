@@ -166,8 +166,7 @@ apt-get install -y software-properties-common ca-certificates lsb-release apt-tr
 
 log_info "Adding Ondrej PPA and installing PHP 8.3 + Extensions..."
 add-apt-repository -y -n ppa:ondrej/php
-add-apt-repository -y -n ppa:ondrej/nginx
-apt-get update -y
+add-apt-repository -y ppa:ondrej/nginx
 
 apt-get install -y nginx mariadb-server \
 	php8.3 php8.3-fpm php8.3-cli php8.3-mysql php8.3-curl \
