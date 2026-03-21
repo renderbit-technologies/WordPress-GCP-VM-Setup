@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [ "$(id -u)" -ne 0 ]; then
-	echo "Please run as root: sudo $0"
-	exit 1
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+	if [ "$(id -u)" -ne 0 ]; then
+		echo "Please run as root: sudo $0"
+		exit 1
+	fi
 fi
 
 MODE="${1:-initial}"
@@ -59,24 +61,26 @@ run_installation() {
 	bash ./setup-wp-nginx.sh
 }
 
-configure_test_env
-cd "${REPO_ROOT}"
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+	configure_test_env
+	cd "${REPO_ROOT}"
 
-case "${MODE}" in
-	initial)
-		run_installation
-		verify_installation
-		echo "Hosted runner initial integration test completed successfully."
-		;;
-	idempotency)
-		echo "Re-running scripts to verify idempotency..."
-		run_installation
-		verify_installation
-		echo "Hosted runner idempotency check completed successfully."
-		;;
-	*)
-		echo "Unsupported mode: ${MODE}"
-		echo "Usage: sudo bash tests/bash/run-on-runner.sh [initial|idempotency]"
-		exit 1
-		;;
-esac
+	case "${MODE}" in
+		initial)
+			run_installation
+			verify_installation
+			echo "Hosted runner initial integration test completed successfully."
+			;;
+		idempotency)
+			echo "Re-running scripts to verify idempotency..."
+			run_installation
+			verify_installation
+			echo "Hosted runner idempotency check completed successfully."
+			;;
+		*)
+			echo "Unsupported mode: ${MODE}"
+			echo "Usage: sudo bash tests/bash/run-on-runner.sh [initial|idempotency]"
+			exit 1
+			;;
+	esac
+fi

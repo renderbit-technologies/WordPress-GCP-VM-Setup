@@ -2,17 +2,14 @@
 set -euo pipefail
 
 # Import the function to test
-# We can't source the whole file because it runs logic at the end and requires root.
-# So we'll extract the function or just redefine it for the sake of the test if needed,
-# but the goal is to test the actual implementation.
-# Let's extract it.
-
+# We source the file but main execution is guarded.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RUNNER_SCRIPT="${SCRIPT_DIR}/run-on-runner.sh"
 
-# Extract append_host_entry function from run-on-runner.sh
-# It's better than copy-paste to ensure we test the actual code.
-eval "$(sed -n '/^append_host_entry() {/,/^}/p' "${RUNNER_SCRIPT}")"
+# Mock variables required by the sourced script
+export DOMAIN="test.local"
+# shellcheck source=tests/bash/run-on-runner.sh
+source "${RUNNER_SCRIPT}"
 
 # Test Helper
 assert_contains() {
