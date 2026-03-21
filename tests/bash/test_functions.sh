@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 set -euo pipefail
 
 # Import the function to test
@@ -16,26 +16,26 @@ eval "$(sed -n '/^append_host_entry() {/,/^}/p' "${RUNNER_SCRIPT}")"
 
 # Test Helper
 assert_contains() {
-	local file=$1
-	local pattern=$2
-	if ! grep -q "$pattern" "$file"; then
-		echo "Assertion failed: $file does not contain '$pattern'"
-		cat "$file"
-		exit 1
-	fi
+  local file=$1
+  local pattern=$2
+  if ! grep -q "$pattern" "$file"; then
+    echo "Assertion failed: $file does not contain '$pattern'"
+    cat "$file"
+    exit 1
+  fi
 }
 
 assert_count() {
-	local file=$1
-	local pattern=$2
-	local expected=$3
-	local count
-count=$(grep -c "$pattern" "$file" || true)
-	if [ "$count" -ne "$expected" ]; then
-		echo "Assertion failed: $file contains '$pattern' $count times, expected $expected"
-		cat "$file"
-		exit 1
-	fi
+  local file=$1
+  local pattern=$2
+  local expected=$3
+  local count
+  count=$(grep -c "$pattern" "$file" || echo 0)
+  if [ "$count" -ne "$expected" ]; then
+    echo "Assertion failed: $file contains '$pattern' $count times, expected $expected"
+    cat "$file"
+    exit 1
+  fi
 }
 
 # Setup temp hosts file
