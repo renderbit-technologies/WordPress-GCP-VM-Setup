@@ -165,8 +165,8 @@ apt-get update -y
 apt-get install -y software-properties-common ca-certificates lsb-release apt-transport-https curl gnupg2 wget htop rsync zip unzip python3
 
 log_info "Adding Ondrej PPA and installing PHP 8.4 + Extensions..."
-add-apt-repository -y -n ppa:ondrej/php
-add-apt-repository -y -n ppa:ondrej/nginx
+add-apt-repository -y ppa:ondrej/php
+add-apt-repository -y ppa:ondrej/nginx
 apt-get update -y
 
 apt-get install -y nginx mariadb-server \
@@ -531,8 +531,8 @@ rm -f "$WEB_ROOT/readme.html" "$WEB_ROOT/license.txt" || true
 # -------------------------
 log_info "Applying permission hardening (www-data:www-data, 0775/0664)..."
 chown -R www-data:www-data "$WEB_ROOT"
-find "$WEB_ROOT" -type d -exec chmod 0775 {} +
-find "$WEB_ROOT" -type f -exec chmod 0664 {} +
+find "$WEB_ROOT" -type d -exec chmod 0775 {} \;
+find "$WEB_ROOT" -type f -exec chmod 0664 {} \;
 
 # -------------------------
 # WordPress core install
@@ -663,8 +663,8 @@ log_info "Finalizing permissions and cleaning up..."
 
 # Ensure ownerships - User Requested: www-data:www-data, 0775 dirs, 0664 files
 chown -R www-data:www-data "$WEB_ROOT"
-find "$WEB_ROOT" -type d -exec chmod 0775 {} +
-find "$WEB_ROOT" -type f -exec chmod 0664 {} +
+find "$WEB_ROOT" -type d -exec chmod 0775 {} \;
+find "$WEB_ROOT" -type f -exec chmod 0664 {} \;
 
 # Re-lock wp-config (prevent world-read)
 chmod 640 "$WP_CONFIG" || true
