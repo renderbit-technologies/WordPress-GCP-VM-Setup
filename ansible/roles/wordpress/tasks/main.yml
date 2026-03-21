@@ -178,13 +178,18 @@
     regexp: "\\$cfg\\['blowfish_secret'\\] = '';"
     replace: "$cfg['blowfish_secret'] = '{{ pma_blowfish }}';"
 
+- name: Set phpMyAdmin directory permissions
+  ansible.builtin.file:
+    path: /usr/share/phpmyadmin
+    state: directory
+    mode: "0755"
+
 - name: Set phpMyAdmin ownership
   ansible.builtin.file:
     path: /usr/share/phpmyadmin
     state: directory
     owner: www-data
     group: www-data
-    mode: "0755"
     recurse: true
 
 - name: Create phpMyAdmin tmp directory
@@ -194,6 +199,12 @@
     owner: www-data
     group: www-data
     mode: "0750"
+
+- name: Ensure phpMyAdmin config permissions
+  ansible.builtin.file:
+    path: /usr/share/phpmyadmin/config.inc.php
+    state: file
+    mode: "0640"
 
 - name: Clean up phpMyAdmin zip
   ansible.builtin.file:
