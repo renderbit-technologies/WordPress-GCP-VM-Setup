@@ -4,12 +4,13 @@ set -euo pipefail
 # Import the function to test
 # We source the file but main execution is guarded.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-RUNNER_SCRIPT="${SCRIPT_DIR}/run-on-runner.sh"
 
 # Mock variables required by the sourced script
 export DOMAIN="test.local"
-# shellcheck source=./run-on-runner.sh
-source "${RUNNER_SCRIPT}"
+
+# Using repository-relative path for shellcheck to find it from repo root
+# shellcheck source=tests/bash/run-on-runner.sh
+source "${SCRIPT_DIR}/run-on-runner.sh"
 
 # Test Helper
 assert_contains() {
