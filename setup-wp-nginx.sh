@@ -165,8 +165,8 @@ apt-get update -y
 apt-get install -y software-properties-common ca-certificates lsb-release apt-transport-https curl gnupg2 wget htop rsync zip unzip python3
 
 log_info "Adding Ondrej PPA and installing PHP 8.4 + Extensions..."
-add-apt-repository -y ppa:ondrej/php
-add-apt-repository -y ppa:ondrej/nginx
+add-apt-repository -y -n ppa:ondrej/php
+add-apt-repository -y -n ppa:ondrej/nginx
 apt-get update -y
 
 apt-get install -y nginx mariadb-server \
