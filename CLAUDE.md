@@ -9,7 +9,7 @@ This repository maintains two deployment paths for a production-ready WordPress 
 - **Bash scripts**: Root-level scripts for interactive or CI deployment
 - **Ansible playbook**: Idempotent, repeatable provisioning in `ansible/`
 
-The stack includes: Nginx (Ondrej PPA), PHP 8.3 FPM, MariaDB, WordPress (latest), phpMyAdmin, Certbot (Let's Encrypt), Fail2Ban, and unattended upgrades.
+The stack includes: Nginx (Ondrej PPA), PHP 8.4 FPM, MariaDB, WordPress (latest), phpMyAdmin, Certbot (Let's Encrypt), Fail2Ban, and unattended upgrades.
 
 ## Command Reference
 
@@ -123,7 +123,7 @@ When modifying shared functionality (e.g., WordPress hardening, Nginx config, PH
 
 **WordPress Stack** (`setup-wp-nginx.sh` or `wordpress` role):
 
-1. **Packages**: Ondrej PPAs → Nginx, MariaDB, PHP 8.3 FPM + extensions
+1. **Packages**: Ondrej PPAs → Nginx, MariaDB, PHP 8.4 FPM + extensions
 2. **PHP-FPM Tuning**: Dynamic pool sizing based on CPU cores (`pm.max_children = cores × 5`)
 3. **OPcache**: 256MB memory, 10K accelerated files
 4. **MariaDB**: Creates WP database/user, removes anonymous users, sets root password

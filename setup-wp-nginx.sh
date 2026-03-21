@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # setup-wp-nginx.sh
-# Installs nginx + PHP 8.3 (Ondrej PPA) + MariaDB + WordPress + phpMyAdmin with hardening
+# Installs nginx + PHP 8.4 (Ondrej PPA) + MariaDB + WordPress + phpMyAdmin with hardening
 #
 # Supported Environment Variables:
 #   DOMAIN            (Required) Domain to install WordPress for (e.g., example.com)
@@ -59,7 +59,7 @@ fi
 # Interactive inputs
 # -------------------------
 echo "-------------------------------------------------------"
-log_info "Starting WP + phpMyAdmin + Nginx/PHP 8.3 Setup Wizard"
+log_info "Starting WP + phpMyAdmin + Nginx/PHP 8.4 Setup Wizard"
 echo "-------------------------------------------------------"
 
 # Check if any configuration environment variables are set
@@ -158,32 +158,33 @@ else
 fi
 
 # -------------------------
-# System packages & Ondrej PHP PPA for PHP 8.3
+# System packages & Ondrej PHP PPA for PHP 8.4
 # -------------------------
 log_info "Updating system packages and repositories..."
 apt-get update -y
 apt-get install -y software-properties-common ca-certificates lsb-release apt-transport-https curl gnupg2 wget htop rsync zip unzip python3
 
-log_info "Adding Ondrej PPA and installing PHP 8.3 + Extensions..."
-add-apt-repository -y -n ppa:ondrej/php
+log_info "Adding Ondrej PPA and installing PHP 8.4 + Extensions..."
+add-apt-repository -y ppa:ondrej/php
 add-apt-repository -y ppa:ondrej/nginx
+apt-get update -y
 
 apt-get install -y nginx mariadb-server \
-	php8.3 php8.3-fpm php8.3-cli php8.3-mysql php8.3-curl \
-	php8.3-gd php8.3-mbstring php8.3-xml php8.3-zip php8.3-intl php8.3-opcache php8.3-imagick
+	php8.4 php8.4-fpm php8.4-cli php8.4-mysql php8.4-curl \
+	php8.4-gd php8.4-mbstring php8.4-xml php8.4-zip php8.4-intl php8.4-opcache php8.4-imagick
 
 log_info "Enabling services..."
 systemctl enable --now nginx
-systemctl enable --now php8.3-fpm
+systemctl enable --now php8.4-fpm
 
 # -------------------------
 # PHP-FPM & PHP.ini tuning (FPM pool + opcache + php.ini)
 # -------------------------
 log_info "Tuning PHP-FPM configuration..."
-PHP_FPM_SOCK="/run/php/php8.3-fpm.sock"
+PHP_FPM_SOCK="/run/php/php8.4-fpm.sock"
 if [ ! -S "$PHP_FPM_SOCK" ]; then
-	log_error "php8.3-fpm socket not found at $PHP_FPM_SOCK"
-	log_info "Check php8.3-fpm status: systemctl status php8.3-fpm"
+	log_error "php8.4-fpm socket not found at $PHP_FPM_SOCK"
+	log_info "Check php8.4-fpm status: systemctl status php8.4-fpm"
 	exit 1
 fi
 
@@ -201,7 +202,7 @@ PM_MAX_REQUESTS=500
 log_info "Pool Sizing: Cores=$CORES | Max Children=$MAX_CHILDREN"
 
 # Update FPM pool config
-FPM_POOL_CONF="/etc/php/8.3/fpm/pool.d/www.conf"
+FPM_POOL_CONF="/etc/php/8.4/fpm/pool.d/www.conf"
 if [ -f "$FPM_POOL_CONF" ]; then
 	sed -i "s/^pm = .*/pm = dynamic/" "$FPM_POOL_CONF" || true
 	sed -i "s/^pm.max_children = .*/pm.max_children = ${MAX_CHILDREN}/" "$FPM_POOL_CONF" || true
@@ -217,7 +218,7 @@ if [ -f "$FPM_POOL_CONF" ]; then
 fi
 
 # Tune php.ini (FPM)
-PHP_FPM_INI="/etc/php/8.3/fpm/php.ini"
+PHP_FPM_INI="/etc/php/8.4/fpm/php.ini"
 if [ -f "$PHP_FPM_INI" ]; then
 	# sensible values for WordPress
 	sed -i "s/^memory_limit = .*/memory_limit = 256M/" "$PHP_FPM_INI" || true
@@ -230,7 +231,7 @@ fi
 
 # Configure OPcache for performance
 log_info "Configuring OPcache..."
-OPCACHE_CONF="/etc/php/8.3/mods-available/opcache.ini"
+OPCACHE_CONF="/etc/php/8.4/mods-available/opcache.ini"
 cat >"$OPCACHE_CONF" <<'OPC'
 ; Enable OPcache
 opcache.enable=1
@@ -246,8 +247,8 @@ opcache.fast_shutdown=1
 OPC
 
 # Restart PHP-FPM for changes
-systemctl restart php8.3-fpm
-log_success "PHP 8.3 tuned and restarted."
+systemctl restart php8.4-fpm
+log_success "PHP 8.4 tuned and restarted."
 
 # -------------------------
 # Install phpMyAdmin
@@ -332,7 +333,7 @@ server {
         access_log off;
     }
 
-    # PHP via php8.3-fpm socket (MAIN)
+    # PHP via php8.4-fpm socket (MAIN)
     location ~ \.php$ {
         include snippets/fastcgi-php.conf;
         fastcgi_pass unix:$PHP_FPM_SOCK;
@@ -529,7 +530,8 @@ rm -f "$WEB_ROOT/readme.html" "$WEB_ROOT/license.txt" || true
 # -------------------------
 log_info "Applying permission hardening (www-data:www-data, 0775/0664)..."
 chown -R www-data:www-data "$WEB_ROOT"
-chmod -R u=rw,g=rw,o=r,a+X "$WEB_ROOT"
+find "$WEB_ROOT" -type d -exec chmod 0775 {} \;
+find "$WEB_ROOT" -type f -exec chmod 0664 {} \;
 
 # -------------------------
 # WordPress core install
@@ -660,14 +662,15 @@ log_info "Finalizing permissions and cleaning up..."
 
 # Ensure ownerships - User Requested: www-data:www-data, 0775 dirs, 0664 files
 chown -R www-data:www-data "$WEB_ROOT"
-chmod -R u=rw,g=rw,o=r,a+X "$WEB_ROOT"
+find "$WEB_ROOT" -type d -exec chmod 0775 {} \;
+find "$WEB_ROOT" -type f -exec chmod 0664 {} \;
 
 # Re-lock wp-config (prevent world-read)
 chmod 640 "$WP_CONFIG" || true
 # Note: Owner is already www-data from recursive chown above, so web server can still read it.
 
 rm -rf "$TMPDIR"
-systemctl reload php8.3-fpm || true
+systemctl reload php8.4-fpm || true
 systemctl reload nginx || true
 
 # -------------------------
