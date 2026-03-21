@@ -8,8 +8,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Mock variables required by the sourced script
 export DOMAIN="test.local"
 
-# Using repository-relative path for shellcheck to find it from repo root
-# shellcheck source=tests/bash/run-on-runner.sh
+# We source the script to test its functions.
+# SC1091 is disabled because the path is dynamic and ShellCheck struggles to follow it in CI.
+# shellcheck disable=SC1091
 source "${SCRIPT_DIR}/run-on-runner.sh"
 
 # Test Helper
