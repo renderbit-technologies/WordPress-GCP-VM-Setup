@@ -8,7 +8,7 @@ RUNNER_SCRIPT="${SCRIPT_DIR}/run-on-runner.sh"
 
 # Mock variables required by the sourced script
 export DOMAIN="test.local"
-# shellcheck source=tests/bash/run-on-runner.sh
+# shellcheck source=./run-on-runner.sh
 source "${RUNNER_SCRIPT}"
 
 # Test Helper
