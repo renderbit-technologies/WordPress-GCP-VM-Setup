@@ -83,4 +83,11 @@ echo "127.0.0.1 localhost inlist.local" >> "${TMP_HOSTS}"
 append_host_entry "inlist.local" "${TMP_HOSTS}"
 assert_count "${TMP_HOSTS}" "inlist\.local" 1
 
+# Test 8: Do not match similar IPs (e.g., 127.0.0.10 should not match 127.0.0.1)
+echo "Test 8: Similar IP avoidance"
+echo "127.0.0.10 similar.local" >> "${TMP_HOSTS}"
+append_host_entry "similar.local" "${TMP_HOSTS}"
+assert_contains "${TMP_HOSTS}" "^127\.0\.0\.1 similar\.local$"
+assert_count "${TMP_HOSTS}" "similar\.local" 2
+
 echo "All tests passed successfully!"
