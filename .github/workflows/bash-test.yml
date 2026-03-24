@@ -5,12 +5,14 @@ on:
     branches: [main]
     paths:
       - "*.sh"
+      - ".github/scripts/**"
       - "tests/bash/**"
       - ".github/workflows/bash-test.yml"
   pull_request:
     branches: [main]
     paths:
       - "*.sh"
+      - ".github/scripts/**"
       - "tests/bash/**"
       - ".github/workflows/bash-test.yml"
   workflow_dispatch:
@@ -22,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -50,11 +52,10 @@ jobs:
 
       - name: Run vagrant up
         run: |
-          cd tests/bash
           sudo rmmod kvm_amd || true
           sudo rmmod kvm_intel || true
           sudo rmmod kvm || true
-          vagrant up --provider=virtualbox
+          bash .github/scripts/run-vagrant-up-with-retry.sh tests/bash
 
       - name: Verify deployment (internal)
         run: |
