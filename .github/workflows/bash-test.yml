@@ -5,14 +5,12 @@ on:
     branches: [main]
     paths:
       - "*.sh"
-      - ".github/scripts/**"
       - "tests/bash/**"
       - ".github/workflows/bash-test.yml"
   pull_request:
     branches: [main]
     paths:
       - "*.sh"
-      - ".github/scripts/**"
       - "tests/bash/**"
       - ".github/workflows/bash-test.yml"
   workflow_dispatch:
@@ -24,13 +22,13 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    timeout-minutes: 60
+    timeout-minutes: 45
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Cache Vagrant boxes
-        uses: actions/cache@v5
+        uses: actions/cache@v4
         with:
           path: ~/.vagrant.d/boxes
           key: ${{ runner.os }}-vagrant-${{ hashFiles('tests/bash/Vagrantfile') }}
@@ -52,10 +50,13 @@ jobs:
 
       - name: Run vagrant up
         run: |
+          cd tests/bash
+          # GitHub Actions runners might not support hardware virtualization for VirtualBox well.
+          # Unload KVM modules that block VirtualBox from accessing AMD-V/VT-x
           sudo rmmod kvm_amd || true
           sudo rmmod kvm_intel || true
           sudo rmmod kvm || true
-          bash .github/scripts/run-vagrant-up-with-retry.sh tests/bash
+          vagrant up --provider=virtualbox
 
       - name: Verify deployment (internal)
         run: |
