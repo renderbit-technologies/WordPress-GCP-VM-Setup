@@ -4,11 +4,13 @@ on:
   push:
     branches: [main]
     paths:
+      - ".github/scripts/**"
       - "ansible/**"
       - ".github/workflows/ansible-test.yml"
   pull_request:
     branches: [main]
     paths:
+      - ".github/scripts/**"
       - "ansible/**"
       - ".github/workflows/ansible-test.yml"
 
@@ -17,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -57,11 +59,10 @@ jobs:
 
       - name: Run vagrant up
         run: |
-          cd ansible
           sudo rmmod kvm_amd || true
           sudo rmmod kvm_intel || true
           sudo rmmod kvm || true
-          vagrant up --provider=virtualbox
+          bash .github/scripts/run-vagrant-up-with-retry.sh ansible
 
       - name: Verify deployment (internal)
         run: |
