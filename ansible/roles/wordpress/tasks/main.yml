@@ -8,11 +8,29 @@
     state: present
     update_cache: true
 
-- name: Add Nginx PPA
+- name: Download Nginx signing key
+  ansible.builtin.get_url:
+    url: https://nginx.org/keys/nginx_signing.key
+    dest: /tmp/nginx_signing.key
+    mode: '0644'
+
+- name: Dearmor Nginx signing key
+  ansible.builtin.command:
+    cmd: gpg --dearmor -o /usr/share/keyrings/nginx-archive-keyring.gpg /tmp/nginx_signing.key
+    creates: /usr/share/keyrings/nginx-archive-keyring.gpg
+
+- name: Add official Nginx repository
   ansible.builtin.apt_repository:
-    repo: "ppa:ondrej/nginx"
+    repo: "deb [signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] http://nginx.org/packages/ubuntu {{ ansible_distribution_release }} nginx"
     state: present
+    filename: nginx
     update_cache: true
+
+- name: Pin Nginx packages from nginx.org
+  ansible.builtin.copy:
+    dest: /etc/apt/preferences.d/99nginx
+    content: "Package: *\nPin: origin nginx.org\nPin-Priority: 900\n"
+    mode: '0644'
 
 - name: Install Nginx, PHP 8.4, MariaDB, Certbot
   ansible.builtin.apt:
@@ -86,14 +104,14 @@
     - { key: "pm.max_requests", value: "{{ wordpress_fpm_max_requests }}" }
   notify: Restart PHP-FPM
 
-- name: Ensure FPM listen owner/group is www-data
+- name: Ensure FPM listen owner/group matches nginx.org package user
   ansible.builtin.lineinfile:
     path: /etc/php/8.4/fpm/pool.d/www.conf
     regexp: "^{{ item.key }} ="
     line: "{{ item.key }} = {{ item.value }}"
   loop:
-    - { key: "listen.owner", value: "www-data" }
-    - { key: "listen.group", value: "www-data" }
+    - { key: "listen.owner", value: "nginx" }
+    - { key: "listen.group", value: "nginx" }
   notify: Restart PHP-FPM
 
 # --------------------------------------------------------
@@ -272,6 +290,55 @@
 # --------------------------------------------------------
 # Nginx Configuration
 # --------------------------------------------------------
+
+# The official nginx.org package does not create the Ubuntu-style
+# directory layout, so create the required directories explicitly.
+- name: Create Nginx snippets directory
+  ansible.builtin.file:
+    path: /etc/nginx/snippets
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Create Nginx sites-available directory
+  ansible.builtin.file:
+    path: /etc/nginx/sites-available
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Create Nginx sites-enabled directory
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Add sites-enabled include to nginx.conf
+  ansible.builtin.lineinfile:
+    path: /etc/nginx/nginx.conf
+    insertafter: 'include\s+/etc/nginx/conf\.d/\*\.conf;'
+    line: "    include /etc/nginx/sites-enabled/*;"
+    state: present
+  notify: Restart Nginx
+
+- name: Deploy fastcgi-php snippet for PHP-FPM
+  ansible.builtin.copy:
+    dest: /etc/nginx/snippets/fastcgi-php.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      fastcgi_split_path_info ^(.+?\.php)(/.*)$;
+      try_files $fastcgi_script_name =404;
+      set $path_info $fastcgi_path_info;
+      fastcgi_param PATH_INFO $path_info;
+      fastcgi_index index.php;
+      include fastcgi_params;
+
 - name: Create Web Root
   ansible.builtin.file:
     path: /var/www/{{ domain }}

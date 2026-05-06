@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # setup-wp-nginx.sh
-# Installs nginx + PHP 8.4 (Ondrej PPA) + MariaDB + WordPress + phpMyAdmin with hardening
+# Installs nginx (official nginx.org repo) + PHP 8.4 (Ondrej PPA) + MariaDB + WordPress + phpMyAdmin with hardening
 #
 # Supported Environment Variables:
 #   DOMAIN            (Required) Domain to install WordPress for (e.g., example.com)
@@ -158,15 +158,25 @@ else
 fi
 
 # -------------------------
-# System packages & Ondrej PHP PPA for PHP 8.4
+# System packages, Ondrej PHP PPA for PHP 8.4, and official Nginx repository
 # -------------------------
 log_info "Updating system packages and repositories..."
 apt-get update -y
 apt-get install -y software-properties-common ca-certificates lsb-release apt-transport-https curl gnupg2 wget htop rsync zip unzip python3
 
-log_info "Adding Ondrej PPA and installing PHP 8.4 + Extensions..."
+log_info "Adding Ondrej PHP PPA for PHP 8.4..."
 add-apt-repository -y ppa:ondrej/php
-add-apt-repository -y ppa:ondrej/nginx
+
+log_info "Adding official Nginx repository..."
+if [ ! -f /usr/share/keyrings/nginx-archive-keyring.gpg ]; then
+  curl -fsSL https://nginx.org/keys/nginx_signing.key \
+    | gpg --dearmor -o /usr/share/keyrings/nginx-archive-keyring.gpg
+fi
+echo "deb [signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] \
+http://nginx.org/packages/ubuntu $(lsb_release -cs) nginx" \
+  > /etc/apt/sources.list.d/nginx.list
+printf 'Package: *\nPin: origin nginx.org\nPin-Priority: 900\n' \
+  > /etc/apt/preferences.d/99nginx
 apt-get update -y
 
 apt-get install -y nginx mariadb-server \
@@ -212,9 +222,11 @@ if [ -f "$FPM_POOL_CONF" ]; then
 	grep -q "^pm.min_spare_servers" "$FPM_POOL_CONF" || echo "pm.min_spare_servers = ${MIN_SPARE_SERVERS}" >>"$FPM_POOL_CONF"
 	grep -q "^pm.max_spare_servers" "$FPM_POOL_CONF" || echo "pm.max_spare_servers = ${MAX_SPARE_SERVERS}" >>"$FPM_POOL_CONF"
 	grep -q "^pm.max_requests" "$FPM_POOL_CONF" || echo "pm.max_requests = ${PM_MAX_REQUESTS}" >>"$FPM_POOL_CONF"
-	# Ensure listen.owner/group are www-data
-	sed -i "s/^listen.owner = .*/listen.owner = www-data/" "$FPM_POOL_CONF" || true
-	sed -i "s/^listen.group = .*/listen.group = www-data/" "$FPM_POOL_CONF" || true
+	# Ensure listen.owner/group match the nginx.org package user (nginx)
+	sed -i "s/^listen\.owner = .*/listen.owner = nginx/" "$FPM_POOL_CONF" || true
+	sed -i "s/^listen\.group = .*/listen.group = nginx/" "$FPM_POOL_CONF" || true
+	grep -q "^listen\.owner" "$FPM_POOL_CONF" || echo "listen.owner = nginx" >>"$FPM_POOL_CONF"
+	grep -q "^listen\.group" "$FPM_POOL_CONF" || echo "listen.group = nginx" >>"$FPM_POOL_CONF"
 fi
 
 # Tune php.ini (FPM)
@@ -285,6 +297,26 @@ log_info "Configuring Nginx server block for $DOMAIN..."
 mkdir -p "$WEB_ROOT"
 chown -R www-data:www-data "$WEB_ROOT"
 chmod -R 0775 "$WEB_ROOT"
+
+# The official nginx.org package does not create the Ubuntu-style directory
+# layout. Create the required directories and configuration hooks.
+mkdir -p /etc/nginx/snippets /etc/nginx/sites-available /etc/nginx/sites-enabled
+
+# Add sites-enabled include to nginx.conf if not already present.
+if ! grep -q "sites-enabled" /etc/nginx/nginx.conf; then
+	sed -i '/include \/etc\/nginx\/conf\.d\/\*\.conf;/a\    include /etc/nginx/sites-enabled/*;' \
+		/etc/nginx/nginx.conf
+fi
+
+# Create a fastcgi-php.conf shim used by the server block below.
+cat >/etc/nginx/snippets/fastcgi-php.conf <<'FCGI'
+fastcgi_split_path_info ^(.+?\.php)(/.*)$;
+try_files $fastcgi_script_name =404;
+set $path_info $fastcgi_path_info;
+fastcgi_param PATH_INFO $path_info;
+fastcgi_index index.php;
+include fastcgi_params;
+FCGI
 
 SEC_SNIPPET="/etc/nginx/snippets/security-headers.conf"
 cat >"$SEC_SNIPPET" <<'NGSEC'
