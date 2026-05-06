@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # setup-wp-nginx.sh
-# Installs nginx + PHP 8.4 (Ondrej PPA) + MariaDB + WordPress + phpMyAdmin with hardening
+# Installs nginx (official nginx.org repo) + PHP 8.4 (Ondrej PPA) + MariaDB + WordPress + phpMyAdmin with hardening
 #
 # Supported Environment Variables:
 #   DOMAIN            (Required) Domain to install WordPress for (e.g., example.com)
@@ -158,15 +158,25 @@ else
 fi
 
 # -------------------------
-# System packages & Ondrej PHP PPA for PHP 8.4
+# System packages, Ondrej PHP PPA for PHP 8.4, and official Nginx repository
 # -------------------------
 log_info "Updating system packages and repositories..."
 apt-get update -y
 apt-get install -y software-properties-common ca-certificates lsb-release apt-transport-https curl gnupg2 wget htop rsync zip unzip python3
 
-log_info "Adding Ondrej PPA and installing PHP 8.4 + Extensions..."
+log_info "Adding Ondrej PHP PPA for PHP 8.4..."
 add-apt-repository -y ppa:ondrej/php
-add-apt-repository -y ppa:ondrej/nginx
+
+log_info "Adding official Nginx repository..."
+if [ ! -f /usr/share/keyrings/nginx-archive-keyring.gpg ]; then
+  curl -fsSL https://nginx.org/keys/nginx_signing.key \
+    | gpg --dearmor -o /usr/share/keyrings/nginx-archive-keyring.gpg
+fi
+echo "deb [signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] \
+http://nginx.org/packages/ubuntu $(lsb_release -cs) nginx" \
+  > /etc/apt/sources.list.d/nginx.list
+printf 'Package: *\nPin: origin nginx.org\nPin-Priority: 900\n' \
+  > /etc/apt/preferences.d/99nginx
 apt-get update -y
 
 apt-get install -y nginx mariadb-server \
