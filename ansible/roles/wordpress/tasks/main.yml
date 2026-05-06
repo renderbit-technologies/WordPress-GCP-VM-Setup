@@ -290,6 +290,55 @@
 # --------------------------------------------------------
 # Nginx Configuration
 # --------------------------------------------------------
+
+# The official nginx.org package does not create the Ubuntu-style
+# directory layout, so create the required directories explicitly.
+- name: Create Nginx snippets directory
+  ansible.builtin.file:
+    path: /etc/nginx/snippets
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Create Nginx sites-available directory
+  ansible.builtin.file:
+    path: /etc/nginx/sites-available
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Create Nginx sites-enabled directory
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Add sites-enabled include to nginx.conf
+  ansible.builtin.lineinfile:
+    path: /etc/nginx/nginx.conf
+    insertafter: 'include\s+/etc/nginx/conf\.d/\*\.conf;'
+    line: "    include /etc/nginx/sites-enabled/*;"
+    state: present
+  notify: Restart Nginx
+
+- name: Deploy fastcgi-php snippet for PHP-FPM
+  ansible.builtin.copy:
+    dest: /etc/nginx/snippets/fastcgi-php.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      fastcgi_split_path_info ^(.+?\.php)(/.*)$;
+      try_files $fastcgi_script_name =404;
+      set $path_info $fastcgi_path_info;
+      fastcgi_param PATH_INFO $path_info;
+      fastcgi_index index.php;
+      include fastcgi.conf;
+
 - name: Create Web Root
   ansible.builtin.file:
     path: /var/www/{{ domain }}

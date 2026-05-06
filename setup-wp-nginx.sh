@@ -296,6 +296,26 @@ mkdir -p "$WEB_ROOT"
 chown -R www-data:www-data "$WEB_ROOT"
 chmod -R 0775 "$WEB_ROOT"
 
+# The official nginx.org package does not create the Ubuntu-style directory
+# layout. Create the required directories and configuration hooks.
+mkdir -p /etc/nginx/snippets /etc/nginx/sites-available /etc/nginx/sites-enabled
+
+# Add sites-enabled include to nginx.conf if not already present.
+if ! grep -q "sites-enabled" /etc/nginx/nginx.conf; then
+	sed -i '/include \/etc\/nginx\/conf\.d\/\*\.conf;/a\    include /etc/nginx/sites-enabled/*;' \
+		/etc/nginx/nginx.conf
+fi
+
+# Create a fastcgi-php.conf shim used by the server block below.
+cat >/etc/nginx/snippets/fastcgi-php.conf <<'FCGI'
+fastcgi_split_path_info ^(.+?\.php)(/.*)$;
+try_files $fastcgi_script_name =404;
+set $path_info $fastcgi_path_info;
+fastcgi_param PATH_INFO $path_info;
+fastcgi_index index.php;
+include fastcgi.conf;
+FCGI
+
 SEC_SNIPPET="/etc/nginx/snippets/security-headers.conf"
 cat >"$SEC_SNIPPET" <<'NGSEC'
 add_header X-Frame-Options "SAMEORIGIN" always;
