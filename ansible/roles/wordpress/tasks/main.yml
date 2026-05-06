@@ -104,14 +104,14 @@
     - { key: "pm.max_requests", value: "{{ wordpress_fpm_max_requests }}" }
   notify: Restart PHP-FPM
 
-- name: Ensure FPM listen owner/group is www-data
+- name: Ensure FPM listen owner/group matches nginx.org package user
   ansible.builtin.lineinfile:
     path: /etc/php/8.4/fpm/pool.d/www.conf
     regexp: "^{{ item.key }} ="
     line: "{{ item.key }} = {{ item.value }}"
   loop:
-    - { key: "listen.owner", value: "www-data" }
-    - { key: "listen.group", value: "www-data" }
+    - { key: "listen.owner", value: "nginx" }
+    - { key: "listen.group", value: "nginx" }
   notify: Restart PHP-FPM
 
 # --------------------------------------------------------

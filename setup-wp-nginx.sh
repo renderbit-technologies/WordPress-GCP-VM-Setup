@@ -222,9 +222,11 @@ if [ -f "$FPM_POOL_CONF" ]; then
 	grep -q "^pm.min_spare_servers" "$FPM_POOL_CONF" || echo "pm.min_spare_servers = ${MIN_SPARE_SERVERS}" >>"$FPM_POOL_CONF"
 	grep -q "^pm.max_spare_servers" "$FPM_POOL_CONF" || echo "pm.max_spare_servers = ${MAX_SPARE_SERVERS}" >>"$FPM_POOL_CONF"
 	grep -q "^pm.max_requests" "$FPM_POOL_CONF" || echo "pm.max_requests = ${PM_MAX_REQUESTS}" >>"$FPM_POOL_CONF"
-	# Ensure listen.owner/group are www-data
-	sed -i "s/^listen.owner = .*/listen.owner = www-data/" "$FPM_POOL_CONF" || true
-	sed -i "s/^listen.group = .*/listen.group = www-data/" "$FPM_POOL_CONF" || true
+	# Ensure listen.owner/group match the nginx.org package user (nginx)
+	sed -i "s/^listen\.owner = .*/listen.owner = nginx/" "$FPM_POOL_CONF" || true
+	sed -i "s/^listen\.group = .*/listen.group = nginx/" "$FPM_POOL_CONF" || true
+	grep -q "^listen\.owner" "$FPM_POOL_CONF" || echo "listen.owner = nginx" >>"$FPM_POOL_CONF"
+	grep -q "^listen\.group" "$FPM_POOL_CONF" || echo "listen.group = nginx" >>"$FPM_POOL_CONF"
 fi
 
 # Tune php.ini (FPM)
