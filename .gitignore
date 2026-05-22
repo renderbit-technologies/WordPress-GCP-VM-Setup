@@ -9,3 +9,5 @@ ansible/inventory.ini
 
 # Logs
 firebase-debug.log
+
+.claude/settings.local.json
