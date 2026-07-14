@@ -2,6 +2,8 @@
 
 This directory contains a Vagrant environment for testing the bash installation scripts (`setup-swap.sh`, `setup-wp-nginx.sh`).
 
+Both this harness and the Ansible harness (`ansible/Vagrantfile`) verify the resulting deployment with the same shared script, [`tests/verify-deployment.sh`](../verify-deployment.sh). It checks: front page and `wp-login.php` respond, the front page actually renders WordPress markup (not a blank page), phpMyAdmin is reachable, sensitive paths (`wp-config.php`, `xmlrpc.php`, hidden files, PHP execution under `wp-content/uploads`) are blocked, uploads over nginx's default 1MB limit are accepted, swap is active, and `/root/.wp-credentials` exists with mode `600`.
+
 It also includes `run-on-runner.sh`, a hosted-runner integration harness for GitHub Actions. That path runs the scripts directly on an ephemeral Ubuntu runner and skips Certbot so CI does not depend on nested virtualization or public DNS.
 
 ## Prerequisites
@@ -86,6 +88,7 @@ The following environment variables control script behaviour during provisioning
 | `ENABLE_FAIL2BAN` | Enable Fail2Ban (`y`/`n`)           | `y`                      |
 | `CONT`            | Auto-confirm prompts (`y`/`n`)      | `y`                      |
 | `SWAP_SIZE`       | Swap file size                      | `1G`                     |
+| `SKIP_CERTBOT`    | Skip TLS provisioning (`y`/`n`)     | `y`                      |
 
 To customise these values for a local test run, export them before calling `vagrant up`:
 

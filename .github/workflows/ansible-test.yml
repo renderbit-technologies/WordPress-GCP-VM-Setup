@@ -6,13 +6,17 @@ on:
     paths:
       - ".github/scripts/**"
       - "ansible/**"
+      - "tests/verify-deployment.sh"
       - ".github/workflows/ansible-test.yml"
   pull_request:
     branches: [main]
     paths:
       - ".github/scripts/**"
       - "ansible/**"
+      - "tests/verify-deployment.sh"
       - ".github/workflows/ansible-test.yml"
+  schedule:
+    - cron: "45 2 * * *"
 
 jobs:
   vagrant-test:
@@ -49,7 +53,7 @@ jobs:
         run: |
           sudo apt-get install -y ansible
           ansible --version
-          ansible-galaxy collection install community.mysql
+          ansible-galaxy collection install -r ansible/collections/requirements.yml
 
       - name: Syntax check
         run: |
@@ -67,10 +71,12 @@ jobs:
       - name: Verify deployment (internal)
         run: |
           cd ansible
-          vagrant ssh -c "curl -I http://localhost"
+          # The full verification already runs inside the Vagrant provisioner;
+          # re-run it here too as a from-outside-the-provisioner sanity check.
+          vagrant ssh -c 'DOMAIN="192.168.56.10.nip.io" WP_DB="wpdb" WP_DB_USER="wpuser" sudo -E bash /vagrant-tests/verify-deployment.sh'
 
       - name: Idempotency check
         run: |
           cd ansible
           vagrant provision
-          vagrant ssh -c "curl -I http://localhost"
+          vagrant ssh -c 'DOMAIN="192.168.56.10.nip.io" WP_DB="wpdb" WP_DB_USER="wpuser" sudo -E bash /vagrant-tests/verify-deployment.sh'

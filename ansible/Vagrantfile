@@ -12,6 +12,11 @@ Vagrant.configure("2") do |config|
   # Configure a private network for easy access
   config.vm.network "private_network", ip: "192.168.56.10"
 
+  # The default sync maps this directory (ansible/) to /vagrant, which is
+  # what ansible.playbook resolves against below. The shared verification
+  # script lives at the repo root under tests/, so sync it separately.
+  config.vm.synced_folder "../tests", "/vagrant-tests"
+
   # Configure CPU and Memory (WordPress + MariaDB can be heavy)
   config.vm.provider "virtualbox" do |vb|
     vb.memory = "2048"
@@ -26,14 +31,26 @@ Vagrant.configure("2") do |config|
     ansible.limit = "all"
     ansible.verbose = "v"
 
-    # Pass extra vars if needed
+    # Pass extra vars if needed. wp_db_pass/wp_admin_pass/mysql_root_pass are
+    # deliberately left unset so the vars_prompt defaults (blank) kick in and
+    # the playbook auto-generates them on first run, then reuses them from
+    # /root/.wp-credentials on `vagrant provision` - this is exactly the
+    # scenario that must stay idempotent (credentials must not rotate on
+    # re-runs). ansible_local runs non-interactively, so the blank prompts
+    # resolve to their defaults instead of hanging.
     ansible.extra_vars = {
       domain: "192.168.56.10.nip.io", # Use nip.io for DNS resolution
       use_www: false,
-      wp_db_pass: "vagrant",
-      wp_admin_pass: "vagrant",
       admin_email: "admin@vagrant.local",
       enable_ssl: false # SSL should not be set while using Vagrant
     }
   end
+
+  # Verify the deployment (also exercises credential reuse on `vagrant provision`)
+  config.vm.provision "shell", run: "always", inline: <<-SHELL
+    set -e
+    echo "Verifying installation..."
+    DOMAIN="192.168.56.10.nip.io" WP_DB="wpdb" WP_DB_USER="wpuser" \
+      bash /vagrant-tests/verify-deployment.sh
+  SHELL
 end
