@@ -6,8 +6,8 @@ Automated, production-ready scripts and Ansible playbooks to deploy a high-perfo
 
 | Component        | Details                                                                        |
 | ---------------- | ------------------------------------------------------------------------------ |
-| **Web server**   | Nginx (Ondrej PPA)                                                             |
-| **PHP**          | 8.4 FPM — pool sizing tuned to available CPU cores, OPcache enabled            |
+| **Web server**   | Nginx (official nginx.org repo)                                                |
+| **PHP**          | 8.4 FPM — pool sizing tuned to available CPU cores and RAM, OPcache enabled    |
 | **Database**     | MariaDB with root hardening and dedicated WP user                              |
 | **CMS**          | WordPress (latest) installed via WP-CLI                                        |
 | **Database UI**  | phpMyAdmin (latest, auto-configured)                                           |

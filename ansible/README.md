@@ -29,19 +29,19 @@ This is the main role and handles everything from packages to a working WordPres
 
 #### Package Installation
 
-- Adds Ondrej PPAs for PHP and Nginx.
+- Adds the Ondrej PPA for PHP and the official nginx.org repository for Nginx.
 - Installs Nginx, MariaDB, PHP 8.4 (FPM, CLI, and extensions: mysql, xml, curl, mbstring, zip, gd, intl, opcache, imagick), Certbot with Nginx plugin.
 
 #### PHP-FPM Tuning
 
-- Calculates pool parameters based on available CPU cores:
+- Calculates pool parameters based on available CPU cores, capped by available RAM so a low-memory box isn't sized as if it had all its cores' worth of workers:
   - `pm = dynamic`
   - `pm.max_children = cores × 5` (min 5)
   - `pm.start_servers = cores × 2` (min 2)
   - `pm.min_spare_servers = cores` (min 1)
   - `pm.max_spare_servers = cores × 3` (min 3)
   - `pm.max_requests = 500`
-- Sets `listen.owner` and `listen.group` to `www-data`.
+- Sets `listen.owner` and `listen.group` to `nginx` (the nginx.org package's worker user).
 - Tunes `php.ini`: `memory_limit = 256M`, `upload_max_filesize = 64M`, `post_max_size = 64M`, `max_execution_time = 300`, `realpath_cache_size = 4096k`, `realpath_cache_ttl = 600`.
 
 #### OPcache Configuration
@@ -204,10 +204,10 @@ These are populated automatically and should not be overridden:
 - **Ansible** 2.9+
 - **Target server**: Ubuntu 20.04 / 22.04 / 24.04 (recommended)
 - **SSH access** to the target server
-- **`community.mysql` collection**:
+- **`ansible.posix` and `community.mysql` collections**:
 
   ```bash
-  ansible-galaxy collection install community.mysql
+  ansible-galaxy collection install -r collections/requirements.yml
   ```
 
 ## Usage
@@ -268,14 +268,15 @@ A `Vagrantfile` is included for local testing using a disposable VM.
    This will:
    - Boot an Ubuntu 24.04 VM (`bento/ubuntu-24.04`) with 2 GB RAM and 2 CPUs.
    - Install Ansible on the guest via the `ansible_local` provisioner.
-   - Run the playbook with test overrides: domain `192.168.56.10.nip.io`, SSL disabled, test passwords.
+   - Run the playbook with test overrides: domain `192.168.56.10.nip.io`, SSL disabled. Passwords are left blank so the playbook auto-generates and saves them to `/root/.wp-credentials`, same as a real run.
+   - Run [`tests/verify-deployment.sh`](../tests/verify-deployment.sh) to check the site, phpMyAdmin, blocked paths, swap, and the credentials file.
 
 3. Access the WordPress site:
    - Open `http://192.168.56.10.nip.io` in your browser.
    - phpMyAdmin: `http://192.168.56.10.nip.io/phpmyadmin`
    - Or map the domain in `/etc/hosts`: `192.168.56.10  192.168.56.10.nip.io`
 
-4. Reprovision (test idempotency):
+4. Reprovision (test idempotency — credentials must be reused, not rotated):
 
    ```bash
    vagrant provision
