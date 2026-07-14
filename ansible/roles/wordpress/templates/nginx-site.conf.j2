@@ -1,12 +1,47 @@
+{% if cert_exists %}
 server {
     listen 80;
     listen [::]:80;
     server_name {{ domain }}{% if use_www %} www.{{ domain }}{% endif %};
 
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/{{ domain }};
+        allow all;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name {{ domain }}{% if use_www %} www.{{ domain }}{% endif %};
+
+    ssl_certificate /etc/letsencrypt/live/{{ domain }}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/{{ domain }}/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+{% else %}
+server {
+    listen 80;
+    listen [::]:80;
+    server_name {{ domain }}{% if use_www %} www.{{ domain }}{% endif %};
+{% endif %}
+
     root /var/www/{{ domain }};
     index index.php index.html index.htm;
 
+    client_max_body_size 64m;
+
     include /etc/nginx/snippets/security-headers.conf;
+    include /etc/nginx/snippets/gzip.conf;
+
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/{{ domain }};
+        allow all;
+    }
 
     location / {
         try_files $uri $uri/ /index.php?$args;
@@ -27,7 +62,7 @@ server {
     }
 
     # Static files
-    location ~* \.(?:css|js|jpg|jpeg|gif|png|svg|ico|woff2?|ttf|eot)$ {
+    location ~* \.(?:css|js|jpg|jpeg|gif|png|svg|ico|woff2?|ttf|eot|webp|avif)$ {
         try_files $uri =404;
         expires max;
         access_log off;
@@ -38,7 +73,6 @@ server {
         include snippets/fastcgi-php.conf;
         fastcgi_pass unix:/run/php/php8.4-fpm.sock;
         fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-        include fastcgi_params;
     }
 
     # phpMyAdmin Location Block
@@ -50,7 +84,6 @@ server {
             root /usr/share;
             fastcgi_pass unix:/run/php/php8.4-fpm.sock;
             fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-            include fastcgi_params;
             include snippets/fastcgi-php.conf;
         }
 
@@ -59,7 +92,7 @@ server {
         }
     }
 
-    # Deny hidden files
+    # Deny hidden files (ACME challenge above takes precedence via ^~)
     location ~ /\. {
         deny all;
         access_log off;

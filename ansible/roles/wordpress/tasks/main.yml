@@ -81,12 +81,26 @@
   ansible.builtin.set_fact:
     wordpress_php_cores: "{{ ansible_processor_vcpus | default(1) }}"
 
+# Cap sizing by available RAM too, not just CPU cores: with memory_limit=256M
+# per worker, a core-only formula can size pm.max_children well beyond what
+# the box (minus ~768M reserved for MariaDB/OS) can actually hold. Reserve
+# ~96M/worker as a realistic average footprint and fold that into the same
+# "cores" basis the rest of the formula uses, so the invariant
+# min_spare <= start_servers <= max_spare <= max_children is preserved
+# automatically regardless of which limit (CPU or RAM) ends up binding.
+- name: Cap FPM pool sizing to available RAM
+  ansible.builtin.set_fact:
+    wordpress_fpm_effective_cores: >-
+      {{ [wordpress_php_cores | int,
+          [((ansible_memtotal_mb | default(1024) | int - 768) / 480) | int, 1] | max
+         ] | min }}
+
 - name: Calculate FPM pool parameters
   ansible.builtin.set_fact:
-    wordpress_fpm_max_children: "{{ [wordpress_php_cores | int * 5, 5] | max }}"
-    wordpress_fpm_start_servers: "{{ [wordpress_php_cores | int * 2, 2] | max }}"
-    wordpress_fpm_min_spare_servers: "{{ [wordpress_php_cores | int, 1] | max }}"
-    wordpress_fpm_max_spare_servers: "{{ [wordpress_php_cores | int * 3, 3] | max }}"
+    wordpress_fpm_max_children: "{{ [wordpress_fpm_effective_cores | int * 5, 5] | max }}"
+    wordpress_fpm_start_servers: "{{ [wordpress_fpm_effective_cores | int * 2, 2] | max }}"
+    wordpress_fpm_min_spare_servers: "{{ [wordpress_fpm_effective_cores | int, 1] | max }}"
+    wordpress_fpm_max_spare_servers: "{{ [wordpress_fpm_effective_cores | int * 3, 3] | max }}"
     wordpress_fpm_max_requests: 500
 
 - name: Tune PHP-FPM pool (pm = dynamic)
@@ -151,11 +165,19 @@
     path: /usr/share/phpmyadmin
   register: wordpress_pma_check
 
+- name: Fetch phpMyAdmin checksum
+  ansible.builtin.uri:
+    url: https://www.phpmyadmin.net/downloads/phpMyAdmin-latest-all-languages.zip.sha256
+    return_content: true
+  register: wordpress_pma_checksum
+  when: not wordpress_pma_check.stat.exists
+
 - name: Download phpMyAdmin
   ansible.builtin.get_url:
     url: https://www.phpmyadmin.net/downloads/phpMyAdmin-latest-all-languages.zip
     dest: /tmp/pma.zip
     mode: "0644"
+    checksum: "sha256:{{ wordpress_pma_checksum.content.split(' ')[0] }}"
   when: not wordpress_pma_check.stat.exists
 
 - name: Unzip phpMyAdmin
@@ -245,6 +267,7 @@
     priv: "{{ wp_db_name }}.*:ALL"
     host: localhost
     state: present
+    update_password: on_create
     login_unix_socket: /var/run/mysqld/mysqld.sock
 
 - name: Remove anonymous MySQL users
@@ -262,14 +285,22 @@
     login_unix_socket: /var/run/mysqld/mysqld.sock
   failed_when: false
 
+- name: Check if MariaDB root password already configured
+  ansible.builtin.stat:
+    path: /root/.my.cnf
+  register: wordpress_root_cnf_check
+
+# Only attempted on first run: once set, ALTER USER flips root's auth
+# plugin away from unix_socket, so a plain socket login (as used here)
+# would fail on every subsequent run. /root/.my.cnf (created below) is
+# what re-runs authenticate with afterwards.
 - name: Set MariaDB root password
   community.mysql.mysql_user:
     name: root
     password: "{{ mysql_root_pass }}"
     host: localhost
     login_unix_socket: /var/run/mysqld/mysqld.sock
-  failed_when: false
-
+  when: not wordpress_root_cnf_check.stat.exists
 
 - name: Create .my.cnf for root
   ansible.builtin.template:
@@ -281,11 +312,18 @@
 # --------------------------------------------------------
 # Install WP-CLI
 # --------------------------------------------------------
+- name: Fetch WP-CLI checksum
+  ansible.builtin.uri:
+    url: https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar.sha512
+    return_content: true
+  register: wordpress_wpcli_checksum
+
 - name: Install WP-CLI
   ansible.builtin.get_url:
     url: https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
     dest: /usr/local/bin/wp
     mode: "0755"
+    checksum: "sha512:{{ wordpress_wpcli_checksum.content | trim }}"
 
 # --------------------------------------------------------
 # Nginx Configuration
@@ -347,6 +385,21 @@
     group: www-data
     mode: "0775"
 
+- name: Deploy Nginx gzip snippet
+  ansible.builtin.copy:
+    dest: /etc/nginx/snippets/gzip.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      gzip on;
+      gzip_vary on;
+      gzip_proxied any;
+      gzip_comp_level 5;
+      gzip_min_length 256;
+      gzip_types text/plain text/css text/xml application/xml application/javascript application/json image/svg+xml;
+  notify: Restart Nginx
+
 - name: Deploy Nginx security headers snippet
   ansible.builtin.template:
     src: security-headers.conf.j2
@@ -356,6 +409,15 @@
     mode: "0644"
   notify: Restart Nginx
 
+# Rendered up-front so config stays correct across re-runs: certbot's task
+# below only runs once (guarded by `creates:`), so on every subsequent run
+# this file must already describe the HTTPS server block itself rather than
+# relying on certbot having patched it in place.
+- name: Check for existing TLS certificate
+  ansible.builtin.stat:
+    path: "/etc/letsencrypt/live/{{ domain }}/fullchain.pem"
+  register: wordpress_cert_check
+
 - name: Deploy Nginx site configuration
   ansible.builtin.template:
     src: nginx-site.conf.j2
@@ -363,6 +425,8 @@
     owner: root
     group: root
     mode: "0644"
+  vars:
+    cert_exists: "{{ wordpress_cert_check.stat.exists and (enable_ssl | default(true)) }}"
   notify: Restart Nginx
 
 - name: Enable Nginx Site
@@ -375,6 +439,12 @@
 - name: Remove Default Nginx Site
   ansible.builtin.file:
     path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify: Restart Nginx
+
+- name: Remove nginx.org default server block
+  ansible.builtin.file:
+    path: /etc/nginx/conf.d/default.conf
     state: absent
   notify: Restart Nginx
 
@@ -423,6 +493,28 @@
     --skip-email
   changed_when: false
   when: not wordpress_wp_config_check.stat.exists
+
+# --------------------------------------------------------
+# Default Theme
+# --------------------------------------------------------
+# `--skip-content` above means there are no theme packages on disk at all,
+# so a fresh install renders a blank front page. Install a default theme,
+# but only if nothing is active yet, so re-runs never stomp an admin's
+# later theme choice.
+- name: Check for an active WordPress theme
+  become: true
+  become_user: www-data
+  ansible.builtin.command: "wp theme list --status=active --field=name --path=/var/www/{{ domain }}"
+  register: wordpress_active_theme_check
+  changed_when: false
+  failed_when: false
+
+- name: Install and activate a default theme
+  become: true
+  become_user: www-data
+  ansible.builtin.command: "wp theme install twentytwentyfive --activate --path=/var/www/{{ domain }}"
+  when: wordpress_active_theme_check.stdout | trim | length == 0
+  changed_when: true
   failed_when: false
 
 # --------------------------------------------------------
@@ -565,6 +657,23 @@
   when: enable_ssl | default(true)
   failed_when: false
 
+- name: Check for TLS certificate after Certbot run
+  ansible.builtin.stat:
+    path: "/etc/letsencrypt/live/{{ domain }}/fullchain.pem"
+  register: wordpress_cert_check_post
+  when: enable_ssl | default(true)
+
+- name: Point WordPress site URLs at https once a certificate is present
+  become: true
+  become_user: www-data
+  ansible.builtin.command: "wp option update {{ item }} https://{{ domain }} --path=/var/www/{{ domain }}"
+  loop:
+    - home
+    - siteurl
+  when: enable_ssl | default(true) and wordpress_cert_check_post.stat.exists
+  changed_when: false
+  failed_when: false
+
 - name: Enable Certbot renewal timer
   ansible.builtin.service:
     name: certbot.timer
@@ -602,26 +711,19 @@
     owner: root
     group: root
     mode: "0600"
+  no_log: true
 
-- name: Display generated credentials
+# Credentials are intentionally not echoed here (they would otherwise land
+# in plain text in CI/automation logs) - read them from the credentials
+# file on the host instead.
+- name: Display installation summary
   ansible.builtin.debug:
     msg: |
       ===================================================================
       WordPress + phpMyAdmin installation complete for: {{ domain }}
 
       Credentials saved to: /root/.wp-credentials (mode 600)
-
-      MySQL root password: {{ mysql_root_pass }}
-
-      WordPress DB:
-        DB name: {{ wp_db_name }}
-        DB user: {{ wp_db_user }}
-        DB password: {{ wp_db_pass }}
-
-      WordPress admin account:
-        Username: {{ wp_admin_user }}
-        Password: {{ wp_admin_pass }}
-        Admin email: {{ admin_email }}
+      View with: sudo cat /root/.wp-credentials
 
       phpMyAdmin URL: https://{{ domain }}/phpmyadmin
       ===================================================================
