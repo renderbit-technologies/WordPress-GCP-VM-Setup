@@ -736,7 +736,7 @@ sudo -H -u www-data -- wp --path="$WEB_ROOT" user set-role "$WP_ADMIN_USER" admi
 ACTIVE_THEME=$(sudo -H -u www-data -- wp --path="$WEB_ROOT" theme list --status=active --field=name --allow-root 2>/dev/null || true)
 if [ -z "$ACTIVE_THEME" ]; then
 	log_info "Installing and activating default theme..."
-	sudo -H -u www-data -- wp --path="$WEB_ROOT" theme install twentytwentyfive --activate --allow-root || true
+	sudo -H -u www-data -- wp --path="$WEB_ROOT" theme install twentytwentyfive --activate --allow-root
 fi
 
 # -------------------------

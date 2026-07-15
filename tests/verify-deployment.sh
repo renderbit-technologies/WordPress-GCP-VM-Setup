@@ -42,7 +42,7 @@ status_code() {
 }
 
 body_of() {
-	curl -sL -H "Host: $DOMAIN" "http://127.0.0.1$1"
+	curl -sL --resolve "$DOMAIN:80:127.0.0.1" --resolve "$DOMAIN:443:127.0.0.1" -H "Host: $DOMAIN" "http://127.0.0.1$1"
 }
 
 # --- Front page ---
@@ -91,6 +91,7 @@ done
 # --- Hidden files ---
 if [ -d "$WEB_ROOT" ]; then
 	echo "test" >"$WEB_ROOT/.verify-hidden-test"
+	chmod 644 "$WEB_ROOT/.verify-hidden-test"
 	CODE=$(status_code "/.verify-hidden-test")
 	rm -f "$WEB_ROOT/.verify-hidden-test"
 	if [ "$CODE" = "403" ]; then
@@ -107,6 +108,7 @@ if [ -d "$WEB_ROOT/wp-content" ]; then
 	UPLOADS_DIR="$WEB_ROOT/wp-content/uploads"
 	mkdir -p "$UPLOADS_DIR"
 	echo "<?php echo 'should-not-execute';" >"$UPLOADS_DIR/verify-test.php"
+	chmod 644 "$UPLOADS_DIR/verify-test.php"
 	CODE=$(status_code "/wp-content/uploads/verify-test.php")
 	rm -f "$UPLOADS_DIR/verify-test.php"
 	if [ "$CODE" = "403" ]; then

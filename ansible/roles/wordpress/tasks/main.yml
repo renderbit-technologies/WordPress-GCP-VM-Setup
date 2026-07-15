@@ -515,7 +515,6 @@
   ansible.builtin.command: "wp theme install twentytwentyfive --activate --path=/var/www/{{ domain }}"
   when: wordpress_active_theme_check.stdout | trim | length == 0
   changed_when: true
-  failed_when: false
 
 # --------------------------------------------------------
 # wp-config.php Security Injections
