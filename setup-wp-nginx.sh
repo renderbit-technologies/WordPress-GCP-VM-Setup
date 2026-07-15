@@ -9,6 +9,7 @@ set -euo pipefail
 #   USE_WWW           (Optional) Enable www alias? (y/n) [default: y]
 #   WP_DB             (Optional) Database name [default: wpdb]
 #   WP_DB_USER        (Optional) Database user [default: wpuser]
+#   WP_ADMIN_USER     (Optional) WordPress admin username [default: user]
 #   LE_EMAIL          (Optional) Admin email [default: admin@$DOMAIN]
 #   ENABLE_FAIL2BAN   (Optional) Enable fail2ban? (y/n) [default: y]
 #   SKIP_CERTBOT      (Optional) Skip TLS provisioning for CI/test runs (y/n) [default: n]
@@ -109,6 +110,23 @@ if [[ ! "$CONT" =~ ^[Yy]$ ]]; then
 fi
 
 # -------------------------
+# Input validation
+# -------------------------
+# These values are interpolated into SQL, file paths, and nginx config below.
+if [[ ! "$DOMAIN" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$ ]]; then
+	log_error "Invalid DOMAIN: '$DOMAIN'. Expected a bare domain name (e.g. example.com)."
+	exit 1
+fi
+if [[ ! "$WP_DB" =~ ^[A-Za-z0-9_]+$ ]]; then
+	log_error "Invalid WP_DB: '$WP_DB'. Expected letters, digits, and underscores only."
+	exit 1
+fi
+if [[ ! "$WP_DB_USER" =~ ^[A-Za-z0-9_]+$ ]]; then
+	log_error "Invalid WP_DB_USER: '$WP_DB_USER'. Expected letters, digits, and underscores only."
+	exit 1
+fi
+
+# -------------------------
 # Derived & tmp variables
 # -------------------------
 WWW_DOMAIN=""
@@ -116,7 +134,7 @@ if [[ "$USE_WWW" =~ ^[Yy]$ ]]; then WWW_DOMAIN="www.$DOMAIN"; fi
 WEB_ROOT="/var/www/$DOMAIN"
 NGINX_SITE="/etc/nginx/sites-available/$DOMAIN"
 TMPDIR=$(mktemp -d)
-CRED_FILE="$HOME/.wp-credentials"
+CRED_FILE="/root/.wp-credentials"
 PMA_ROOT="/usr/share/phpmyadmin"
 
 export DEBIAN_FRONTEND=noninteractive
@@ -128,9 +146,10 @@ mysql_exec() {
 	if mysql -e "$1" >/dev/null 2>&1; then
 		return 0
 	else
-		# Try with password if set
+		# Try with password if set. Pass it via MYSQL_PWD rather than -p on the
+		# command line so it doesn't briefly appear in `ps` output.
 		if [ -n "${MYSQL_ROOT_PASS:-}" ]; then
-			mysql -u root -p"$MYSQL_ROOT_PASS" -e "$1"
+			MYSQL_PWD="$MYSQL_ROOT_PASS" mysql -u root -e "$1"
 		else
 			# Failed and no password to try
 			return 1
@@ -142,8 +161,11 @@ mysql_exec() {
 # Generate credentials
 # -------------------------
 log_info "Generating secure passwords..."
-WP_ADMIN_USER="user"
-PMA_BLOWFISH=$(openssl rand -base64 32 | tr -d '\n')
+WP_ADMIN_USER="${WP_ADMIN_USER:-user}"
+# phpMyAdmin expects exactly 32 bytes for the blowfish secret; base64 of 24
+# raw bytes yields exactly 32 characters (24/3*4), unlike `rand -base64 32`
+# which yields 44.
+PMA_BLOWFISH=$(openssl rand -base64 24 | tr -d '\n')
 
 if [ -f "$CRED_FILE" ]; then
 	log_info "Found existing credentials file at $CRED_FILE. Using existing credentials."
@@ -151,6 +173,12 @@ if [ -f "$CRED_FILE" ]; then
 	MYSQL_ROOT_PASS=$(awk '/MySQL root password:/{getline; print}' "$CRED_FILE")
 	WP_DB_PASS=$(awk '/DB password:/{print $3}' "$CRED_FILE")
 	WP_ADMIN_PASS=$(awk '/Password:/{if ($1=="Password:") print $2}' "$CRED_FILE")
+
+	if [ -z "$MYSQL_ROOT_PASS" ] || [ -z "$WP_DB_PASS" ] || [ -z "$WP_ADMIN_PASS" ]; then
+		log_error "Could not parse one or more credentials from $CRED_FILE."
+		log_info "The file may be corrupt or from an unrelated installation. Move it aside and re-run to generate new credentials."
+		exit 1
+	fi
 else
 	MYSQL_ROOT_PASS=${MYSQL_ROOT_PASS:-$(openssl rand -base64 18 | tr -d '\n')}
 	WP_ADMIN_PASS=${WP_ADMIN_PASS:-$(openssl rand -base64 18 | tr -d '\n')}
@@ -200,16 +228,32 @@ fi
 
 # Determine CPU cores and set pool sizing
 CORES=$(nproc)
+RAM_MB=$(free -m | awk '/^Mem:/ {print $2}')
+
+# Cap sizing by available RAM too, not just CPU cores: with memory_limit=256M
+# per worker, a core-only formula can size pm.max_children well beyond what
+# the box (minus ~768M reserved for MariaDB/OS) can actually hold. Reserve
+# ~96M/worker as a realistic average footprint and fold that into the same
+# "cores" basis the rest of the formula uses, so the invariant
+# min_spare <= start_servers <= max_spare <= max_children is preserved
+# automatically regardless of which limit (CPU or RAM) ends up binding.
+RAM_CORE_CAP=$(( (RAM_MB - 768) / 480 ))
+if [ "$RAM_CORE_CAP" -lt 1 ]; then RAM_CORE_CAP=1; fi
+EFFECTIVE_CORES=$CORES
+if [ "$RAM_CORE_CAP" -lt "$EFFECTIVE_CORES" ]; then EFFECTIVE_CORES=$RAM_CORE_CAP; fi
+
 # formulas (conservative default): max_children = cores * 5 (min 5), start = cores * 2
-MAX_CHILDREN=$((CORES * 5))
+MAX_CHILDREN=$((EFFECTIVE_CORES * 5))
 if [ "$MAX_CHILDREN" -lt 5 ]; then MAX_CHILDREN=5; fi
-START_SERVERS=$((CORES * 2))
+START_SERVERS=$((EFFECTIVE_CORES * 2))
 if [ "$START_SERVERS" -lt 2 ]; then START_SERVERS=2; fi
-MIN_SPARE_SERVERS=$CORES
-MAX_SPARE_SERVERS=$((CORES * 3))
+MIN_SPARE_SERVERS=$EFFECTIVE_CORES
+if [ "$MIN_SPARE_SERVERS" -lt 1 ]; then MIN_SPARE_SERVERS=1; fi
+MAX_SPARE_SERVERS=$((EFFECTIVE_CORES * 3))
+if [ "$MAX_SPARE_SERVERS" -lt 3 ]; then MAX_SPARE_SERVERS=3; fi
 PM_MAX_REQUESTS=500
 
-log_info "Pool Sizing: Cores=$CORES | Max Children=$MAX_CHILDREN"
+log_info "Pool Sizing: Cores=$CORES | RAM=${RAM_MB}MB | Max Children=$MAX_CHILDREN"
 
 # Update FPM pool config
 FPM_POOL_CONF="/etc/php/8.4/fpm/pool.d/www.conf"
@@ -237,8 +281,8 @@ if [ -f "$PHP_FPM_INI" ]; then
 	sed -i "s/^upload_max_filesize = .*/upload_max_filesize = 64M/" "$PHP_FPM_INI" || true
 	sed -i "s/^post_max_size = .*/post_max_size = 64M/" "$PHP_FPM_INI" || true
 	sed -i "s/^max_execution_time = .*/max_execution_time = 300/" "$PHP_FPM_INI" || true
-	sed -i "s/^;?realpath_cache_size = .*/realpath_cache_size = 4096k/" "$PHP_FPM_INI" || true
-	sed -i "s/^;?realpath_cache_ttl = .*/realpath_cache_ttl = 600/" "$PHP_FPM_INI" || true
+	sed -i -E "s/^;?realpath_cache_size = .*/realpath_cache_size = 4096k/" "$PHP_FPM_INI" || true
+	sed -i -E "s/^;?realpath_cache_ttl = .*/realpath_cache_ttl = 600/" "$PHP_FPM_INI" || true
 fi
 
 # Configure OPcache for performance
@@ -255,7 +299,6 @@ opcache.revalidate_freq=2
 opcache.validate_timestamps=1
 opcache.max_wasted_percentage=5
 opcache.save_comments=1
-opcache.fast_shutdown=1
 OPC
 
 # Restart PHP-FPM for changes
@@ -265,30 +308,41 @@ log_success "PHP 8.4 tuned and restarted."
 # -------------------------
 # Install phpMyAdmin
 # -------------------------
-log_info "Downloading and Installing phpMyAdmin to $PMA_ROOT ..."
+# Re-downloading "latest" on every run is non-idempotent and rotates the
+# blowfish secret (killing PMA sessions) for no reason once it's installed.
+if [ -f "$PMA_ROOT/index.php" ]; then
+	log_info "phpMyAdmin already installed at $PMA_ROOT. Skipping."
+else
+	log_info "Downloading and Installing phpMyAdmin to $PMA_ROOT ..."
 
-# Check if exists, remove to update/reinstall
-if [ -d "$PMA_ROOT" ]; then rm -rf "$PMA_ROOT"; fi
+	cd "$TMPDIR"
+	wget -q https://www.phpmyadmin.net/downloads/phpMyAdmin-latest-all-languages.zip -O pma.zip
 
-cd "$TMPDIR"
-wget -q https://www.phpmyadmin.net/downloads/phpMyAdmin-latest-all-languages.zip -O pma.zip
-unzip -q pma.zip
-mv phpMyAdmin-*-all-languages "$PMA_ROOT"
+	PMA_SHA256_EXPECTED=$(curl -fsSL https://www.phpmyadmin.net/downloads/phpMyAdmin-latest-all-languages.zip.sha256 | awk '{print $1}')
+	PMA_SHA256_ACTUAL=$(sha256sum pma.zip | awk '{print $1}')
+	if [ "$PMA_SHA256_EXPECTED" != "$PMA_SHA256_ACTUAL" ]; then
+		log_error "phpMyAdmin checksum verification failed (expected $PMA_SHA256_EXPECTED, got $PMA_SHA256_ACTUAL)."
+		exit 1
+	fi
 
-# Configure PMA
-cp "$PMA_ROOT/config.sample.inc.php" "$PMA_ROOT/config.inc.php"
-# Inject Blowfish Secret
-sed -i "s|\$cfg\['blowfish_secret'\] = '';|\$cfg\['blowfish_secret'\] = '$PMA_BLOWFISH';|" "$PMA_ROOT/config.inc.php"
-# Fix Permissions
-chown -R www-data:www-data "$PMA_ROOT"
-chmod 0755 "$PMA_ROOT"
-# Ensure config is not world writable
-chmod 640 "$PMA_ROOT/config.inc.php"
+	unzip -q pma.zip
+	mv phpMyAdmin-*-all-languages "$PMA_ROOT"
 
-# Create a temp directory for PMA to use
-install -d -o www-data -g www-data -m 750 "$PMA_ROOT/tmp"
+	# Configure PMA
+	cp "$PMA_ROOT/config.sample.inc.php" "$PMA_ROOT/config.inc.php"
+	# Inject Blowfish Secret
+	sed -i "s|\$cfg\['blowfish_secret'\] = '';|\$cfg\['blowfish_secret'\] = '$PMA_BLOWFISH';|" "$PMA_ROOT/config.inc.php"
+	# Fix Permissions
+	chown -R www-data:www-data "$PMA_ROOT"
+	chmod 0755 "$PMA_ROOT"
+	# Ensure config is not world writable
+	chmod 640 "$PMA_ROOT/config.inc.php"
 
-log_success "phpMyAdmin installed."
+	# Create a temp directory for PMA to use
+	install -d -o www-data -g www-data -m 750 "$PMA_ROOT/tmp"
+
+	log_success "phpMyAdmin installed."
+fi
 
 # -------------------------
 # nginx site & security headers
@@ -328,17 +382,79 @@ add_header X-XSS-Protection "1; mode=block" always;
 add_header Content-Security-Policy "upgrade-insecure-requests; default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https: http:;" always;
 NGSEC
 
-# Create nginx server block (HTTP). certbot will handle HTTPS redirect.
-cat >"$NGINX_SITE" <<NGINX
+cat >/etc/nginx/snippets/gzip.conf <<'NGGZIP'
+gzip on;
+gzip_vary on;
+gzip_proxied any;
+gzip_comp_level 5;
+gzip_min_length 256;
+gzip_types text/plain text/css text/xml application/xml application/javascript application/json image/svg+xml;
+NGGZIP
+
+# Certbot's task later in this script only requests a certificate once
+# (skipped if one already exists), so on re-runs this config must describe
+# the HTTPS server block itself rather than relying on certbot having
+# patched it in place on a prior run.
+CERT_EXISTS="n"
+if [ -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ] && [[ ! "${SKIP_CERTBOT:-n}" =~ ^[Yy]$ ]]; then
+	CERT_EXISTS="y"
+fi
+
+if [[ "$CERT_EXISTS" =~ ^[Yy]$ ]]; then
+	SERVER_HEAD=$(cat <<HEAD
 server {
     listen 80;
     listen [::]:80;
     server_name $DOMAIN${WWW_DOMAIN:+ $WWW_DOMAIN};
 
+    location ^~ /.well-known/acme-challenge/ {
+        root $WEB_ROOT;
+        allow all;
+    }
+
+    location / {
+        return 301 https://\$host\$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name $DOMAIN${WWW_DOMAIN:+ $WWW_DOMAIN};
+
+    ssl_certificate /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+HEAD
+)
+else
+	SERVER_HEAD=$(cat <<HEAD
+server {
+    listen 80;
+    listen [::]:80;
+    server_name $DOMAIN${WWW_DOMAIN:+ $WWW_DOMAIN};
+HEAD
+)
+fi
+
+# Create nginx server block. certbot (below) obtains the cert on the first
+# run; CERT_EXISTS above makes subsequent runs self-sufficient for HTTPS.
+cat >"$NGINX_SITE" <<NGINX
+$SERVER_HEAD
+
     root $WEB_ROOT;
     index index.php index.html index.htm;
 
+    client_max_body_size 64m;
+
     include /etc/nginx/snippets/security-headers.conf;
+    include /etc/nginx/snippets/gzip.conf;
+
+    location ^~ /.well-known/acme-challenge/ {
+        root $WEB_ROOT;
+        allow all;
+    }
 
     location / {
         try_files \$uri \$uri/ /index.php?\$args;
@@ -359,10 +475,28 @@ server {
     }
 
     # Static files
-    location ~* \.(?:css|js|jpg|jpeg|gif|png|svg|ico|woff2?|ttf|eot)$ {
+    location ~* \.(?:css|js|jpg|jpeg|gif|png|svg|ico|woff2?|ttf|eot|webp|avif)$ {
         try_files \$uri =404;
         expires max;
         access_log off;
+    }
+
+    # Deny hidden files (ACME challenge above takes precedence via ^~)
+    location ~ /\. {
+        deny all;
+        access_log off;
+        log_not_found off;
+    }
+
+    # Deny access to any files with a .php extension in the uploads directory.
+    # Must be declared before the generic *.php location below: nginx picks
+    # the FIRST matching regex location in file order, not the most specific
+    # one, so this has to win the race against the catch-all PHP handler for
+    # URIs under uploads/.
+    # Works in sub-directory installs and also in multisite network
+    # Keep logging the requests to parse later (or to pass to firewall utilities such as fail2ban)
+    location ~* /(?:uploads|files)/.*\.php$ {
+        deny all;
     }
 
     # PHP via php8.4-fpm socket (MAIN)
@@ -370,7 +504,6 @@ server {
         include snippets/fastcgi-php.conf;
         fastcgi_pass unix:$PHP_FPM_SOCK;
         fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
-        include fastcgi_params;
     }
 
     # ----------------------------------------------------
@@ -385,7 +518,6 @@ server {
             root /usr/share;
             fastcgi_pass unix:$PHP_FPM_SOCK;
             fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
-            include fastcgi_params;
             include snippets/fastcgi-php.conf;
         }
 
@@ -393,25 +525,12 @@ server {
             root /usr/share;
         }
     }
-
-    # Deny hidden files
-    location ~ /\. {
-        deny all;
-        access_log off;
-        log_not_found off;
-    }
-
-    # Deny access to any files with a .php extension in the uploads directory
-    # Works in sub-directory installs and also in multisite network
-    # Keep logging the requests to parse later (or to pass to firewall utilities such as fail2ban)
-    location ~* /(?:uploads|files)/.*\.php$ {
-        deny all;
-    }
 }
 NGINX
 
 ln -sf "$NGINX_SITE" /etc/nginx/sites-enabled/"$DOMAIN"
 # Remove default site if present
+rm -f /etc/nginx/conf.d/default.conf
 if [ -f /etc/nginx/sites-enabled/default ]; then
 	rm -f /etc/nginx/sites-enabled/default
 fi
@@ -435,7 +554,10 @@ mysql_exec "FLUSH PRIVILEGES;"
 
 log_info "Hardening MariaDB Root account and removing test data..."
 # Extra: ensure no anonymous users and no test DB
-mysql_exec "DELETE FROM mysql.user WHERE User='';" || true
+# Note: mysql.user is a view on modern MariaDB, so DELETE FROM it fails;
+# DROP USER is the supported way to remove the anonymous account.
+mysql_exec "DROP USER IF EXISTS ''@'localhost';" || true
+mysql_exec "DROP USER IF EXISTS ''@'$(hostname)';" || true
 mysql_exec "DROP DATABASE IF EXISTS test;" || true
 mysql_exec "DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';" || true
 mysql_exec "FLUSH PRIVILEGES;" || true
@@ -458,8 +580,16 @@ log_success "Database configured successfully."
 # -------------------------
 if ! command -v wp >/dev/null 2>&1; then
 	log_info "Installing WP-CLI..."
-	curl -sSL https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar -o /usr/local/bin/wp
-	chmod +x /usr/local/bin/wp
+	curl -sSL https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar -o "$TMPDIR/wp-cli.phar"
+
+	WPCLI_SHA512_EXPECTED=$(curl -fsSL https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar.sha512)
+	WPCLI_SHA512_ACTUAL=$(sha512sum "$TMPDIR/wp-cli.phar" | awk '{print $1}')
+	if [ "$WPCLI_SHA512_EXPECTED" != "$WPCLI_SHA512_ACTUAL" ]; then
+		log_error "WP-CLI checksum verification failed."
+		exit 1
+	fi
+
+	install -m 0755 "$TMPDIR/wp-cli.phar" /usr/local/bin/wp
 fi
 
 # -------------------------
@@ -472,8 +602,8 @@ chown -R www-data:www-data "$WEB_ROOT"
 chmod -R 0775 "$WEB_ROOT"
 
 # Download Core
-if ! sudo -u www-data -- wp --path="$WEB_ROOT" core is-installed --allow-root 2>/dev/null; then
-    sudo -u www-data -- wp --path="$WEB_ROOT" core download --skip-content --force || true
+if ! sudo -H -u www-data -- wp --path="$WEB_ROOT" core is-installed --allow-root 2>/dev/null; then
+    sudo -H -u www-data -- wp --path="$WEB_ROOT" core download --skip-content --force
     # Note: --skip-content avoids overwriting default themes/plugins if re-running
     # --force ensures it downloads even if folder exists
 fi
@@ -485,7 +615,7 @@ WP_CONFIG="$WEB_ROOT/wp-config.php"
 
 if [ ! -f "$WP_CONFIG" ]; then
     log_info "Generating wp-config.php via WP-CLI..."
-    sudo -u www-data -- wp --path="$WEB_ROOT" config create \
+    sudo -H -u www-data -- wp --path="$WEB_ROOT" config create \
         --dbname="$WP_DB" \
         --dbuser="$WP_DB_USER" \
         --dbpass="$WP_DB_PASS" \
@@ -562,8 +692,8 @@ rm -f "$WEB_ROOT/readme.html" "$WEB_ROOT/license.txt" || true
 # -------------------------
 log_info "Applying permission hardening (www-data:www-data, 0775/0664)..."
 chown -R www-data:www-data "$WEB_ROOT"
-find "$WEB_ROOT" -type d -exec chmod 0775 {} \;
-find "$WEB_ROOT" -type f -exec chmod 0664 {} \;
+find "$WEB_ROOT" -type d -exec chmod 0775 {} +
+find "$WEB_ROOT" -type f -exec chmod 0664 {} +
 
 # -------------------------
 # WordPress core install
@@ -572,9 +702,9 @@ find "$WEB_ROOT" -type f -exec chmod 0664 {} \;
 SITE_URL="http://$DOMAIN"
 SITE_TITLE="$DOMAIN"
 
-if ! sudo -u www-data -- wp --path="$WEB_ROOT" core is-installed --allow-root 2>/dev/null; then
+if ! sudo -H -u www-data -- wp --path="$WEB_ROOT" core is-installed --allow-root 2>/dev/null; then
 	log_info "Running WP-CLI Core Install..."
-	sudo -u www-data -- wp --path="$WEB_ROOT" core install \
+	sudo -H -u www-data -- wp --path="$WEB_ROOT" core install \
 		--url="$SITE_URL" \
 		--title="$SITE_TITLE" \
 		--admin_user="$WP_ADMIN_USER" \
@@ -588,24 +718,32 @@ else
 fi
 
 # If 'admin' exists, reassign posts to 'user' and delete admin
-if sudo -u www-data -- wp --path="$WEB_ROOT" user get admin --field=ID --allow-root >/dev/null 2>&1; then
+if sudo -H -u www-data -- wp --path="$WEB_ROOT" user get admin --field=ID --allow-root >/dev/null 2>&1; then
 	log_info "Removing default 'admin' user..."
-	sudo -u www-data -- wp --path="$WEB_ROOT" user delete admin --reassign="$WP_ADMIN_USER" --allow-root || true
+	sudo -H -u www-data -- wp --path="$WEB_ROOT" user delete admin --reassign="$WP_ADMIN_USER" --allow-root || true
 fi
 
 # Ensure 'user' has administrator role
-sudo -u www-data -- wp --path="$WEB_ROOT" user set-role "$WP_ADMIN_USER" administrator --allow-root || true
+sudo -H -u www-data -- wp --path="$WEB_ROOT" user set-role "$WP_ADMIN_USER" administrator --allow-root || true
 
-# Enable plugin/theme auto-updates
-log_info "Enabling Plugin/Theme auto-updates..."
-sudo -u www-data -- wp --path="$WEB_ROOT" plugin auto-updates enable --all --allow-root || true
-sudo -u www-data -- wp --path="$WEB_ROOT" theme auto-updates enable --all --allow-root || true
+# -------------------------
+# Default Theme
+# -------------------------
+# --skip-content above means there are no theme packages on disk at all, so
+# a fresh install renders a blank front page. Install a default theme, but
+# only if nothing is active yet, so re-runs never stomp an admin's later
+# theme choice.
+ACTIVE_THEME=$(sudo -H -u www-data -- wp --path="$WEB_ROOT" theme list --status=active --field=name --allow-root 2>/dev/null || true)
+if [ -z "$ACTIVE_THEME" ]; then
+	log_info "Installing and activating default theme..."
+	sudo -H -u www-data -- wp --path="$WEB_ROOT" theme install twentytwentyfive --activate --allow-root
+fi
 
 # -------------------------
 # Install Essential Plugins
 # -------------------------
 log_info "Installing Essential Plugins..."
-sudo -u www-data -- wp --path="$WEB_ROOT" plugin install \
+sudo -H -u www-data -- wp --path="$WEB_ROOT" plugin install \
 	jetpack \
 	akismet \
 	jetpack-protect \
@@ -620,14 +758,20 @@ sudo -u www-data -- wp --path="$WEB_ROOT" plugin install \
 	better-search-replace \
 	--allow-root || true
 
+# Enable plugin/theme auto-updates (after install, so the essential plugins
+# above are actually covered instead of --skip-content leaving nothing to enable)
+log_info "Enabling Plugin/Theme auto-updates..."
+sudo -H -u www-data -- wp --path="$WEB_ROOT" plugin auto-updates enable --all --allow-root || true
+sudo -H -u www-data -- wp --path="$WEB_ROOT" theme auto-updates enable --all --allow-root || true
+
 # Create weekly WP update cron (applies updates automatically)
 CRON_JOB="/etc/cron.weekly/wp-updates"
 cat >"$CRON_JOB" <<'CRON'
 #!/usr/bin/env bash
 WP_PATH=PLACEHOLDER_DOCROOT
-sudo -u www-data -- wp --path="$WP_PATH" core update --minor --allow-root || true
-sudo -u www-data -- wp --path="$WP_PATH" plugin update --all --allow-root || true
-sudo -u www-data -- wp --path="$WP_PATH" theme update --all --allow-root || true
+sudo -H -u www-data -- wp --path="$WP_PATH" core update --minor --allow-root || true
+sudo -H -u www-data -- wp --path="$WP_PATH" plugin update --all --allow-root || true
+sudo -H -u www-data -- wp --path="$WP_PATH" theme update --all --allow-root || true
 echo "WP weekly update run for $WP_PATH" | logger -t wp-updates
 CRON
 sed -i "s|PLACEHOLDER_DOCROOT|$WEB_ROOT|g" "$CRON_JOB"
@@ -655,6 +799,12 @@ else
 	# Ensure certbot renewal service/timer is enabled
 	log_info "Enabling Certbot renewal timer..."
 	systemctl enable --now certbot.timer
+
+	if [ -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
+		log_info "Pointing WordPress site URLs at https://$DOMAIN..."
+		sudo -H -u www-data -- wp --path="$WEB_ROOT" option update home "https://$DOMAIN" --allow-root || true
+		sudo -H -u www-data -- wp --path="$WEB_ROOT" option update siteurl "https://$DOMAIN" --allow-root || true
+	fi
 fi
 
 # -------------------------
@@ -662,7 +812,48 @@ fi
 # -------------------------
 log_info "Configuring Unattended Upgrades..."
 apt-get install -y unattended-upgrades apt-listchanges
-dpkg-reconfigure -f noninteractive unattended-upgrades || true
+
+cat >/etc/apt/apt.conf.d/50unattended-upgrades <<'UUCONF'
+// Automatically upgrade packages from these (origin:archive) pairs
+Unattended-Upgrade::Allowed-Origins {
+    "${distro_id}:${distro_codename}-security";
+    // "${distro_id}:${distro_codename}-updates";
+    // "${distro_id}:${distro_codename}-proposed";
+    // "${distro_id}:${distro_codename}-backports";
+};
+
+// List of packages to not update
+Unattended-Upgrade::Package-Blacklist {
+};
+
+// Send email to this address for problems or packages upgrades.
+// If empty or unset then no email is sent, make sure that you have a
+// working mail setup on your system. A package that provides 'mailx' must
+// be installed.
+Unattended-Upgrade::Mail "PLACEHOLDER_ADMIN_EMAIL";
+
+// Set this value to "true" to get emails only on errors. Default is to
+// always send an email if the log has changed.
+Unattended-Upgrade::MailOnlyOnError "true";
+
+// Remove unused automatically installed kernel-related packages (kernel
+// images, kernel headers and kernel version locked tools).
+Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+
+// Do automatic removal of new unused dependencies after the upgrade
+// (equivalent to apt-get autoremove)
+Unattended-Upgrade::Remove-Unused-Dependencies "true";
+
+// Automatically reboot *WITHOUT CONFIRMATION* if
+//  the file /var/run/reboot-required is found after the upgrade
+Unattended-Upgrade::Automatic-Reboot "false";
+UUCONF
+sed -i "s|PLACEHOLDER_ADMIN_EMAIL|$LE_EMAIL|" /etc/apt/apt.conf.d/50unattended-upgrades
+
+cat >/etc/apt/apt.conf.d/20auto-upgrades <<'AUCONF'
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Unattended-Upgrade "1";
+AUCONF
 
 # -------------------------
 # Fail2ban (optional)
@@ -694,8 +885,8 @@ log_info "Finalizing permissions and cleaning up..."
 
 # Ensure ownerships - User Requested: www-data:www-data, 0775 dirs, 0664 files
 chown -R www-data:www-data "$WEB_ROOT"
-find "$WEB_ROOT" -type d -exec chmod 0775 {} \;
-find "$WEB_ROOT" -type f -exec chmod 0664 {} \;
+find "$WEB_ROOT" -type d -exec chmod 0775 {} +
+find "$WEB_ROOT" -type f -exec chmod 0664 {} +
 
 # Re-lock wp-config (prevent world-read)
 chmod 640 "$WP_CONFIG" || true
@@ -755,21 +946,28 @@ echo -e "=============================================================="
 echo -e "${GREEN}WordPress + phpMyAdmin installation complete for: $DOMAIN${NC}"
 echo -e ""
 echo -e "Credentials saved to: ${YELLOW}$CRED_FILE${NC} (mode 600)"
-echo -e "-- Displaying generated credentials (also saved) --"
-echo -e ""
-echo -e "${BLUE}MySQL root password:${NC}"
-echo -e "$MYSQL_ROOT_PASS"
-echo -e ""
-echo -e "${BLUE}WordPress DB:${NC}"
-echo -e "  DB name: $WP_DB"
-echo -e "  DB user: $WP_DB_USER"
-echo -e "  DB password: $WP_DB_PASS"
-echo -e ""
-echo -e "${BLUE}WordPress admin (new) account:${NC}"
-echo -e "  Username: $WP_ADMIN_USER"
-echo -e "  Password: $WP_ADMIN_PASS"
-echo -e "  Admin email: $LE_EMAIL"
-echo -e ""
+if [ -t 1 ]; then
+	# Only echo plaintext credentials to an interactive terminal - a
+	# non-interactive run (CI, automation) would otherwise leak them into logs.
+	echo -e "-- Displaying generated credentials (also saved) --"
+	echo -e ""
+	echo -e "${BLUE}MySQL root password:${NC}"
+	echo -e "$MYSQL_ROOT_PASS"
+	echo -e ""
+	echo -e "${BLUE}WordPress DB:${NC}"
+	echo -e "  DB name: $WP_DB"
+	echo -e "  DB user: $WP_DB_USER"
+	echo -e "  DB password: $WP_DB_PASS"
+	echo -e ""
+	echo -e "${BLUE}WordPress admin (new) account:${NC}"
+	echo -e "  Username: $WP_ADMIN_USER"
+	echo -e "  Password: $WP_ADMIN_PASS"
+	echo -e "  Admin email: $LE_EMAIL"
+	echo -e ""
+else
+	echo -e "Not displaying credentials in this non-interactive session."
+	echo -e ""
+fi
 echo -e "${BLUE}phpMyAdmin:${NC}"
 echo -e "  URL: https://$DOMAIN/phpmyadmin"
 echo -e ""

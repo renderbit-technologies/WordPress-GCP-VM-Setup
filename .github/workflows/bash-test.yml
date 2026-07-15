@@ -7,6 +7,7 @@ on:
       - "*.sh"
       - ".github/scripts/**"
       - "tests/bash/**"
+      - "tests/verify-deployment.sh"
       - ".github/workflows/bash-test.yml"
   pull_request:
     branches: [main]
@@ -14,6 +15,7 @@ on:
       - "*.sh"
       - ".github/scripts/**"
       - "tests/bash/**"
+      - "tests/verify-deployment.sh"
       - ".github/workflows/bash-test.yml"
   workflow_dispatch:
   schedule:
@@ -60,12 +62,12 @@ jobs:
       - name: Verify deployment (internal)
         run: |
           cd tests/bash
-          # The verification is already inside Vagrant provisioner, but we can double check here
-          # Host header is needed as per provisioner logic
-          vagrant ssh -c 'curl -I -H "Host: vagrant.local" http://localhost'
+          # The full verification already runs inside the Vagrant provisioner;
+          # re-run it here too as a from-outside-the-provisioner sanity check.
+          vagrant ssh -c 'cd /vagrant && sudo env DOMAIN=vagrant.local WP_DB=wp_test WP_DB_USER=wp_user WP_DB_PASS=secure_wp_password bash tests/verify-deployment.sh'
 
       - name: Idempotency check
         run: |
           cd tests/bash
           vagrant provision
-          vagrant ssh -c 'curl -I -H "Host: vagrant.local" http://localhost'
+          vagrant ssh -c 'cd /vagrant && sudo env DOMAIN=vagrant.local WP_DB=wp_test WP_DB_USER=wp_user WP_DB_PASS=secure_wp_password bash tests/verify-deployment.sh'

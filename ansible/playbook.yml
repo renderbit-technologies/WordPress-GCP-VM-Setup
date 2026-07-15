@@ -32,17 +32,104 @@
     swap_size: "2G"
 
   pre_tasks:
+    # Re-running the playbook with blank vars_prompt answers must NOT rotate
+    # passwords that are already live on the box (DB auth, MySQL root auth).
+    # Reuse whatever was recorded on a prior run before falling back to
+    # generating new ones, mirroring the Bash installer's credential reuse.
+    - name: Check for existing credentials file
+      ansible.builtin.stat:
+        path: /root/.wp-credentials
+      register: wordpress_existing_creds
+
+    - name: Parse existing MySQL root password
+      ansible.builtin.command: awk '/MySQL root password:/{getline; print}' /root/.wp-credentials
+      register: wordpress_prior_mysql_root_pass
+      changed_when: false
+      when: wordpress_existing_creds.stat.exists
+      no_log: true
+
+    - name: Parse existing WordPress DB password
+      ansible.builtin.command: awk '/DB password:/{print $3}' /root/.wp-credentials
+      register: wordpress_prior_wp_db_pass
+      changed_when: false
+      when: wordpress_existing_creds.stat.exists
+      no_log: true
+
+    - name: Parse existing WordPress admin password
+      ansible.builtin.command: awk '/Password:/{if ($1=="Password:") print $2}' /root/.wp-credentials
+      register: wordpress_prior_wp_admin_pass
+      changed_when: false
+      when: wordpress_existing_creds.stat.exists
+      no_log: true
+
+    - name: Reuse previously generated WordPress DB password
+      ansible.builtin.set_fact:
+        wp_db_pass: "{{ wordpress_prior_wp_db_pass.stdout }}"
+      when: >
+        wp_db_pass | length == 0 and wordpress_existing_creds.stat.exists
+        and wordpress_prior_wp_db_pass.stdout | default('') | length > 0
+      no_log: true
+
+    - name: Fail fast if the WordPress DB password could not be parsed from an existing credentials file
+      ansible.builtin.fail:
+        msg: >-
+          /root/.wp-credentials exists but its DB password could not be parsed.
+          Refusing to auto-generate a new one, which would desync from the live
+          database password. Inspect or remove /root/.wp-credentials manually
+          before re-running.
+      when: >
+        wp_db_pass | length == 0 and wordpress_existing_creds.stat.exists
+        and wordpress_prior_wp_db_pass.stdout | default('') | length == 0
+
     - name: Auto-generate wp_db_pass if not provided
       ansible.builtin.set_fact:
         wp_db_pass: "{{ lookup('password', '/dev/null length=24 chars=ascii_letters,digits') }}"
       when: wp_db_pass | length == 0
       no_log: true
 
+    - name: Reuse previously generated WordPress admin password
+      ansible.builtin.set_fact:
+        wp_admin_pass: "{{ wordpress_prior_wp_admin_pass.stdout }}"
+      when: >
+        wp_admin_pass | length == 0 and wordpress_existing_creds.stat.exists
+        and wordpress_prior_wp_admin_pass.stdout | default('') | length > 0
+      no_log: true
+
+    - name: Fail fast if the WordPress admin password could not be parsed from an existing credentials file
+      ansible.builtin.fail:
+        msg: >-
+          /root/.wp-credentials exists but its admin password could not be
+          parsed. Refusing to auto-generate a new one, which would desync from
+          the live WordPress admin password. Inspect or remove
+          /root/.wp-credentials manually before re-running.
+      when: >
+        wp_admin_pass | length == 0 and wordpress_existing_creds.stat.exists
+        and wordpress_prior_wp_admin_pass.stdout | default('') | length == 0
+
     - name: Auto-generate wp_admin_pass if not provided
       ansible.builtin.set_fact:
         wp_admin_pass: "{{ lookup('password', '/dev/null length=24 chars=ascii_letters,digits') }}"
       when: wp_admin_pass | length == 0
       no_log: true
+
+    - name: Reuse previously generated MySQL root password
+      ansible.builtin.set_fact:
+        mysql_root_pass: "{{ wordpress_prior_mysql_root_pass.stdout }}"
+      when: >
+        mysql_root_pass | length == 0 and wordpress_existing_creds.stat.exists
+        and wordpress_prior_mysql_root_pass.stdout | default('') | length > 0
+      no_log: true
+
+    - name: Fail fast if the MySQL root password could not be parsed from an existing credentials file
+      ansible.builtin.fail:
+        msg: >-
+          /root/.wp-credentials exists but its MySQL root password could not
+          be parsed. Refusing to auto-generate a new one, which would desync
+          from the live root password (and risks locking out /root/.my.cnf).
+          Inspect or remove /root/.wp-credentials manually before re-running.
+      when: >
+        mysql_root_pass | length == 0 and wordpress_existing_creds.stat.exists
+        and wordpress_prior_mysql_root_pass.stdout | default('') | length == 0
 
     - name: Auto-generate mysql_root_pass if not provided
       ansible.builtin.set_fact:
@@ -52,7 +139,7 @@
 
     - name: Generate phpMyAdmin blowfish secret
       ansible.builtin.set_fact:
-        pma_blowfish: "{{ lookup('password', '/dev/null length=32 chars=ascii_letters,digits,special') }}"
+        pma_blowfish: "{{ lookup('password', '/dev/null length=32 chars=ascii_letters,digits') }}"
       no_log: true
 
   roles:

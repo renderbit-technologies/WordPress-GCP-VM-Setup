@@ -39,6 +39,8 @@ Vagrant.configure("2") do |config|
     export ENABLE_FAIL2BAN="y"
     export CONT="y"
     export SWAP_SIZE="1G"
+    # No public DNS for vagrant.local, so certbot would just fail.
+    export SKIP_CERTBOT="y"
 
     echo "Running setup-swap.sh..."
     chmod +x setup-swap.sh
@@ -49,24 +51,7 @@ Vagrant.configure("2") do |config|
     ./setup-wp-nginx.sh
 
     echo "Verifying installation..."
-    # Verify HTTP response
-    # Using Host header because Nginx is configured for vagrant.local
-    HTTP_CODE=\$(curl -s -o /dev/null -w "%{http_code}" -H "Host: vagrant.local" http://localhost)
-
-    if [[ "\$HTTP_CODE" == "200" || "\$HTTP_CODE" == "301" ]]; then
-        echo "Success: WordPress returned HTTP \$HTTP_CODE"
-    else
-        echo "Error: WordPress returned HTTP \$HTTP_CODE"
-        false
-    fi
-
-    # Verify Database Connection
-    if mysql -u wp_user -psecure_wp_password -h localhost -e "USE wp_test;" 2>/dev/null; then
-        echo "Success: Database connection verified."
-    else
-        echo "Error: Database connection failed."
-        false
-    fi
+    bash tests/verify-deployment.sh
 
     echo "Provisioning complete."
   SHELL

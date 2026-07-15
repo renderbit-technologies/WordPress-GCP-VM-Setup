@@ -37,16 +37,7 @@ configure_test_env() {
 }
 
 verify_installation() {
-	echo "Verifying HTTP response..."
-	HTTP_CODE="$(curl -s -o /dev/null -w "%{http_code}" -H "Host: ${DOMAIN}" http://127.0.0.1)"
-
-	if [[ "${HTTP_CODE}" != "200" && "${HTTP_CODE}" != "301" ]]; then
-		echo "Expected WordPress to return HTTP 200 or 301, got ${HTTP_CODE}"
-		exit 1
-	fi
-
-	echo "Verifying database access..."
-	mysql -u "${WP_DB_USER}" "-p${WP_DB_PASS}" -h localhost -e "USE \`${WP_DB}\`;"
+	bash "${REPO_ROOT}/tests/verify-deployment.sh"
 }
 
 run_installation() {

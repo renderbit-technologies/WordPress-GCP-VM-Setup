@@ -9,7 +9,7 @@ This repository maintains two deployment paths for a production-ready WordPress 
 - **Bash scripts**: Root-level scripts for interactive or CI deployment
 - **Ansible playbook**: Idempotent, repeatable provisioning in `ansible/`
 
-The stack includes: Nginx (Ondrej PPA), PHP 8.4 FPM, MariaDB, WordPress (latest), phpMyAdmin, Certbot (Let's Encrypt), Fail2Ban, and unattended upgrades.
+The stack includes: Nginx (official nginx.org repo), PHP 8.4 FPM (Ondrej PPA), MariaDB, WordPress (latest), phpMyAdmin, Certbot (Let's Encrypt), Fail2Ban, and unattended upgrades.
 
 ## Command Reference
 
@@ -38,8 +38,8 @@ sudo bash tests/bash/run-on-runner.sh idempotency
 **Ansible validation:**
 
 ```bash
-# Install required collection
-ansible-galaxy collection install community.mysql
+# Install required collections (ansible.posix, community.mysql)
+ansible-galaxy collection install -r ansible/collections/requirements.yml
 
 # Syntax check
 cd ansible && ansible-playbook playbook.yml --syntax-check
@@ -123,8 +123,8 @@ When modifying shared functionality (e.g., WordPress hardening, Nginx config, PH
 
 **WordPress Stack** (`setup-wp-nginx.sh` or `wordpress` role):
 
-1. **Packages**: Ondrej PPAs → Nginx, MariaDB, PHP 8.4 FPM + extensions
-2. **PHP-FPM Tuning**: Dynamic pool sizing based on CPU cores (`pm.max_children = cores × 5`)
+1. **Packages**: official nginx.org repo → Nginx; Ondrej PPA → PHP 8.4 FPM + extensions; MariaDB from the distro repo
+2. **PHP-FPM Tuning**: Dynamic pool sizing based on CPU cores and available RAM (`pm.max_children = cores × 5`, capped so the box's RAM isn't oversubscribed)
 3. **OPcache**: 256MB memory, 10K accelerated files
 4. **MariaDB**: Creates WP database/user, removes anonymous users, sets root password
 5. **Nginx**: Security headers, blocked paths (`wp-config.php`, `xmlrpc.php`), static asset caching
@@ -193,6 +193,7 @@ When modifying shared functionality (e.g., WordPress hardening, Nginx config, PH
 - `USE_WWW`: `y/n` (default: `y`)
 - `WP_DB`: Database name (default: `wpdb`)
 - `WP_DB_USER`: Database user (default: `wpuser`)
+- `WP_ADMIN_USER`: WordPress admin username (default: `user`)
 - `WP_DB_PASS`: Auto-generated if not set
 - `WP_ADMIN_PASS`: Auto-generated if not set
 - `MYSQL_ROOT_PASS`: Auto-generated if not set
@@ -212,10 +213,12 @@ When modifying shared functionality (e.g., WordPress hardening, Nginx config, PH
 
 **Credential Reuse**:
 
-- If `/root/.wp-credentials` exists, scripts reuse stored credentials instead of regenerating
+- If `/root/.wp-credentials` exists, both paths reuse stored credentials instead of regenerating them. Bash parses the file directly; the Ansible playbook does the same in `pre_tasks` before its `vars_prompt` auto-generation fallback, so leaving the prompts blank on a re-run does not rotate the DB/root passwords out from under an already-configured site
 - This enables safe re-runs and idempotency
 
 **SSL/TLS**:
+
+- Both paths render the HTTPS server block themselves once a certificate exists (checked via `/etc/letsencrypt/live/$DOMAIN/fullchain.pem`), rather than relying on certbot's one-time in-place edit. This keeps re-runs from reverting the site to HTTP-only, since certbot itself only runs once (skipped on subsequent runs once the certificate exists)
 
 - Production: Certbot with Let's Encrypt, auto-renewal via systemd timer
 - Testing: Skip with `SKIP_CERTBOT=y` (Bash) or `enable_ssl=false` (Ansible)
@@ -243,7 +246,11 @@ The Nginx configuration (identical in both paths) includes:
 
 ### PHP-FPM Pool Sizing Formula
 
-Pool parameters scale with CPU cores (`cores`):
+Pool parameters scale with an effective core count (`cores`) that is capped
+by available RAM: `min(cpu_cores, max((ram_mb - 768) / 480, 1))`. This
+reserves ~768MB for MariaDB/OS and budgets ~96MB per worker (memory_limit is
+256M, but that's a ceiling, not a typical footprint), so a RAM-constrained
+box doesn't get sized as if it had all its CPU cores' worth of workers:
 
 - `pm = dynamic`
 - `pm.max_children = cores × 5` (minimum 5)
@@ -252,7 +259,7 @@ Pool parameters scale with CPU cores (`cores`):
 - `pm.max_spare_servers = cores × 3` (minimum 3)
 - `pm.max_requests = 500`
 
-This formula ensures optimal resource utilization based on available CPU.
+This formula ensures optimal resource utilization based on available CPU and RAM.
 
 ## References
 

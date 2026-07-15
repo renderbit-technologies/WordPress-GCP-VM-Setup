@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Setup script for a new WordPress VM on GCP
-# curl -fsSL https://raw.githubusercontent.com/renderbit-technologies/WordPress-GCP-VM-Setup/main/install.sh -o install.sh && sudo bash install.sh && sudo rm install.sh
+# curl -fsSL https://raw.githubusercontent.com/renderbit-technologies/WordPress-GCP-VM-Setup/main/install.sh -o install.sh && sudo bash install.sh
 
 # Run as root on Ubuntu/Debian: sudo bash install.sh
 if [ "$(id -u)" -ne 0 ]; then
@@ -10,34 +10,46 @@ if [ "$(id -u)" -ne 0 ]; then
 	exit 1
 fi
 
-# Base Gist URL (without commit hash to ensure HEAD/latest version)
-BASE_URL="https://raw.githubusercontent.com/renderbit-technologies/WordPress-GCP-VM-Setup/main"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-echo "-----------------------------------------------------"
-echo "Fetching latest deployment scripts (HEAD revision)..."
-echo "-----------------------------------------------------"
+if [ -f "$SCRIPT_DIR/setup-swap.sh" ] && [ -f "$SCRIPT_DIR/setup-wp-nginx.sh" ]; then
+	# Running from a checkout next to the sub-scripts: use them as-is rather
+	# than overwriting local changes with whatever is on GitHub HEAD.
+	echo "-----------------------------------------------------"
+	echo "Using local deployment scripts from $SCRIPT_DIR"
+	echo "-----------------------------------------------------"
+	SETUP_SWAP="$SCRIPT_DIR/setup-swap.sh"
+	SETUP_WP="$SCRIPT_DIR/setup-wp-nginx.sh"
+else
+	# Base URL (without commit hash to ensure HEAD/latest version)
+	BASE_URL="https://raw.githubusercontent.com/renderbit-technologies/WordPress-GCP-VM-Setup/main"
+	TMPDIR=$(mktemp -d)
+	trap 'rm -rf "$TMPDIR"' EXIT
 
-# Download the files explicitly to disk
-# This preserves stdin so interactive prompts in the sub-scripts will work
-curl -fsSL "${BASE_URL}/setup-swap.sh" -o setup-swap.sh
-curl -fsSL "${BASE_URL}/setup-wp-nginx.sh" -o setup-wp-nginx.sh
+	echo "-----------------------------------------------------"
+	echo "Fetching latest deployment scripts (HEAD revision)..."
+	echo "-----------------------------------------------------"
 
-# Make them executable
-chmod +x setup-swap.sh setup-wp-nginx.sh
+	# Download to a temp dir so this never touches files in the caller's
+	# working directory. This preserves stdin so interactive prompts in the
+	# sub-scripts will work.
+	curl -fsSL "${BASE_URL}/setup-swap.sh" -o "$TMPDIR/setup-swap.sh"
+	curl -fsSL "${BASE_URL}/setup-wp-nginx.sh" -o "$TMPDIR/setup-wp-nginx.sh"
+
+	SETUP_SWAP="$TMPDIR/setup-swap.sh"
+	SETUP_WP="$TMPDIR/setup-wp-nginx.sh"
+fi
 
 echo "-----------------------------------------------------"
 echo "Step 1/2: Setting up Swap"
 echo "-----------------------------------------------------"
-bash ./setup-swap.sh
+bash "$SETUP_SWAP"
 
 echo
 echo "-----------------------------------------------------"
 echo "Step 2/2: Installing WordPress stack"
 echo "-----------------------------------------------------"
-bash ./setup-wp-nginx.sh
-
-# Cleanup
-rm setup-swap.sh setup-wp-nginx.sh
+bash "$SETUP_WP"
 
 echo
 echo "-----------------------------------------------------"

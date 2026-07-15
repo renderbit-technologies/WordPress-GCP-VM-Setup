@@ -17,20 +17,24 @@
     owner: root
     group: root
 
+- name: Check if swap file is already formatted
+  ansible.builtin.command: file /swapfile
+  register: swap_file_format_check
+  changed_when: false
+  failed_when: false
+
 - name: Format swap file
   ansible.builtin.command: mkswap /swapfile
+  when: "'swap file' not in swap_file_format_check.stdout"
+
+- name: Check if swap is already active
+  ansible.builtin.command: swapon --show
+  register: swap_active_check
   changed_when: false
-  when: not swap_file_check.stat.exists
 
 - name: Enable swap
   ansible.builtin.command: swapon /swapfile
-  changed_when: false
-  when: not swap_file_check.stat.exists
-  # Or use ansible.posix.mount if you want idempotency via /proc/swaps check,
-  # but enabling is usually done via fstab + mount -a or manual swapon.
-  # Actually, swapon returns 0 if already enabled usually?
-  # No, running swapon on active swap errors. The 'when' condition handles first run.
-  # Ideally check if active: command: swapon --show | grep /swapfile
+  when: "'/swapfile' not in swap_active_check.stdout"
 
 - name: Add swap to fstab
   ansible.posix.mount:
