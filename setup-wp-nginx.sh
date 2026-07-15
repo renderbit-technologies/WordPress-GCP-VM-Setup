@@ -481,6 +481,24 @@ $SERVER_HEAD
         access_log off;
     }
 
+    # Deny hidden files (ACME challenge above takes precedence via ^~)
+    location ~ /\. {
+        deny all;
+        access_log off;
+        log_not_found off;
+    }
+
+    # Deny access to any files with a .php extension in the uploads directory.
+    # Must be declared before the generic *.php location below: nginx picks
+    # the FIRST matching regex location in file order, not the most specific
+    # one, so this has to win the race against the catch-all PHP handler for
+    # URIs under uploads/.
+    # Works in sub-directory installs and also in multisite network
+    # Keep logging the requests to parse later (or to pass to firewall utilities such as fail2ban)
+    location ~* /(?:uploads|files)/.*\.php$ {
+        deny all;
+    }
+
     # PHP via php8.4-fpm socket (MAIN)
     location ~ \.php$ {
         include snippets/fastcgi-php.conf;
@@ -506,20 +524,6 @@ $SERVER_HEAD
         location ~* ^/phpmyadmin/(.+\.(jpg|jpeg|gif|css|png|js|ico|html|xml|txt))$ {
             root /usr/share;
         }
-    }
-
-    # Deny hidden files (ACME challenge above takes precedence via ^~)
-    location ~ /\. {
-        deny all;
-        access_log off;
-        log_not_found off;
-    }
-
-    # Deny access to any files with a .php extension in the uploads directory
-    # Works in sub-directory installs and also in multisite network
-    # Keep logging the requests to parse later (or to pass to firewall utilities such as fail2ban)
-    location ~* /(?:uploads|files)/.*\.php$ {
-        deny all;
     }
 }
 NGINX

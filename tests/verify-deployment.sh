@@ -61,11 +61,13 @@ else
 fi
 
 # --- wp-login.php ---
+# wp-config.php sets FORCE_SSL_ADMIN, so over plain HTTP (no cert in test
+# environments) this legitimately 302-redirects to https instead of a 200.
 CODE=$(status_code "/wp-login.php")
-if [ "$CODE" = "200" ]; then
-	pass "wp-login.php returned HTTP 200"
+if [ "$CODE" = "200" ] || [ "$CODE" = "302" ]; then
+	pass "wp-login.php returned HTTP $CODE"
 else
-	fail "wp-login.php returned HTTP $CODE (expected 200)"
+	fail "wp-login.php returned HTTP $CODE (expected 200 or 302)"
 fi
 
 # --- phpMyAdmin ---
@@ -158,10 +160,11 @@ if [ -z "${WP_DB_PASS:-}" ] && [ -n "${WP_DB:-}" ] && [ -n "${WP_DB_USER:-}" ] &
 fi
 
 if [ -n "${WP_DB:-}" ] && [ -n "${WP_DB_USER:-}" ] && [ -n "${WP_DB_PASS:-}" ]; then
-	if MYSQL_PWD="$WP_DB_PASS" mysql -u "$WP_DB_USER" -h localhost -e "USE \`$WP_DB\`;" 2>/dev/null; then
+	DB_ERROR=$(MYSQL_PWD="$WP_DB_PASS" mysql -u "$WP_DB_USER" -h localhost -e "USE \`$WP_DB\`;" 2>&1 >/dev/null) && DB_OK=1 || DB_OK=0
+	if [ "$DB_OK" = "1" ]; then
 		pass "Database access verified for $WP_DB_USER@$WP_DB"
 	else
-		fail "Could not connect to database $WP_DB as $WP_DB_USER"
+		fail "Could not connect to database $WP_DB as $WP_DB_USER: $DB_ERROR"
 	fi
 else
 	info "Skipping database check (WP_DB/WP_DB_USER/WP_DB_PASS not set)"
