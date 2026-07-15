@@ -162,7 +162,12 @@ if [ -z "${WP_DB_PASS:-}" ] && [ -n "${WP_DB:-}" ] && [ -n "${WP_DB_USER:-}" ] &
 fi
 
 if [ -n "${WP_DB:-}" ] && [ -n "${WP_DB_USER:-}" ] && [ -n "${WP_DB_PASS:-}" ]; then
-	DB_ERROR=$(MYSQL_PWD="$WP_DB_PASS" mysql -u "$WP_DB_USER" -h localhost -e "USE \`$WP_DB\`;" 2>&1 >/dev/null) && DB_OK=1 || DB_OK=0
+	# --no-defaults must come first: this script runs as root, and if root has
+	# a ~/.my.cnf (the Ansible path writes one for its own passwordless CLI
+	# access), the mysql client's [client] password there silently outranks
+	# MYSQL_PWD below - it would then auth as $WP_DB_USER using root's DB
+	# password instead, always failing with "Access denied".
+	DB_ERROR=$(MYSQL_PWD="$WP_DB_PASS" mysql --no-defaults -u "$WP_DB_USER" -h localhost -e "USE \`$WP_DB\`;" 2>&1 >/dev/null) && DB_OK=1 || DB_OK=0
 	if [ "$DB_OK" = "1" ]; then
 		pass "Database access verified for $WP_DB_USER@$WP_DB"
 	else
