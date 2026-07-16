@@ -53,7 +53,13 @@ else
 	fail "Front page returned HTTP $CODE (expected 200 or 301)"
 fi
 
-BODY=$(body_of "/")
+for attempt in 1 2 3 4 5; do
+	BODY=$(body_of "/")
+	echo "$BODY" | grep -qi "wp-content\|wordpress" && break
+	# A reload of php8.4-fpm/nginx can leave the front page briefly blank
+	# right after provisioning; give it a moment to settle before failing.
+	sleep 1
+done
 if echo "$BODY" | grep -qi "wp-content\|wordpress"; then
 	pass "Front page contains WordPress markup"
 else
