@@ -53,7 +53,7 @@ else
 	fail "Front page returned HTTP $CODE (expected 200 or 301)"
 fi
 
-for attempt in 1 2 3 4 5; do
+for _ in 1 2 3 4 5; do
 	BODY=$(body_of "/")
 	echo "$BODY" | grep -qi "wp-content\|wordpress" && break
 	# A reload of php8.4-fpm/nginx can leave the front page briefly blank
