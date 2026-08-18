@@ -4,8 +4,8 @@
 
 The deployed stack consists of:
 
-- **Web Server:** Nginx (Ondrej PPA)
-- **PHP:** 8.3 FPM (tuned to available CPU cores with OPcache enabled)
+- **Web Server:** Nginx (official nginx.org repo)
+- **PHP:** 8.4 FPM (tuned to available CPU cores with OPcache enabled)
 - **Database:** MariaDB with root hardening and a dedicated WP user
 - **CMS:** WordPress (latest) installed via WP-CLI
 - **Database UI:** phpMyAdmin (latest, auto-configured)
