@@ -160,6 +160,39 @@ else
 	fail "Credentials file $CRED_FILE not found"
 fi
 
+# --- WP-Cron disabled + system cron runner ---
+if [ -f "$WEB_ROOT/wp-config.php" ]; then
+	if grep -q "DISABLE_WP_CRON" "$WEB_ROOT/wp-config.php"; then
+		pass "DISABLE_WP_CRON is defined in wp-config.php"
+	else
+		fail "DISABLE_WP_CRON is not defined in wp-config.php"
+	fi
+else
+	info "Skipping DISABLE_WP_CRON check ($WEB_ROOT/wp-config.php does not exist)"
+fi
+
+if [ -f /etc/cron.d/wp-cron ]; then
+	MODE=$(stat -c "%a" /etc/cron.d/wp-cron 2>/dev/null || stat -f "%Lp" /etc/cron.d/wp-cron)
+	if [ "$MODE" = "644" ] && grep -q "due-now" /etc/cron.d/wp-cron; then
+		pass "/etc/cron.d/wp-cron exists, mode 644, runs --due-now"
+	else
+		fail "/etc/cron.d/wp-cron exists but mode ($MODE) or content is unexpected"
+	fi
+else
+	fail "/etc/cron.d/wp-cron not found"
+fi
+
+# --- sucuri-scanner absent from a fresh install ---
+if [ -d "$WEB_ROOT/wp-content/plugins" ]; then
+	if [ ! -d "$WEB_ROOT/wp-content/plugins/sucuri-scanner" ]; then
+		pass "sucuri-scanner is not installed"
+	else
+		fail "sucuri-scanner directory found (should no longer be installed by default)"
+	fi
+else
+	info "Skipping sucuri-scanner check (wp-content/plugins not present)"
+fi
+
 # --- Database access ---
 # WP_DB_PASS may be auto-generated (e.g. by the Ansible path) and unknown to
 # the caller; fall back to parsing it out of the credentials file.

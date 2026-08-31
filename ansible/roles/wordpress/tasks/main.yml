@@ -517,6 +517,21 @@
   changed_when: true
 
 # --------------------------------------------------------
+# WP-Cron System Cron Job (5-minute, replaces page-load spawning)
+# --------------------------------------------------------
+# Deployed before the "Inject security settings" task below (which sets
+# DISABLE_WP_CRON) so a mid-playbook failure never leaves the box with
+# WP-Cron disabled and no runner to replace it - task order is what closes
+# the gap here, not idempotency alone.
+- name: Deploy 5-minute WP-Cron system cron job
+  ansible.builtin.template:
+    src: wp-cron.j2
+    dest: /etc/cron.d/wp-cron
+    owner: root
+    group: root
+    mode: "0644"
+
+# --------------------------------------------------------
 # wp-config.php Security Injections
 # --------------------------------------------------------
 - name: Inject security settings into wp-config.php
@@ -535,6 +550,9 @@
       define('DISALLOW_FILE_EDIT', true);
       define('WP_AUTO_UPDATE_CORE', 'minor');
       if ( ! defined('FORCE_SSL_ADMIN') ) define('FORCE_SSL_ADMIN', true);
+
+      /** WP-Cron handled by system cron (added by installer) */
+      define('DISABLE_WP_CRON', true);
 
 # --------------------------------------------------------
 # XML-RPC MU-Plugin
@@ -605,7 +623,6 @@
     jetpack-protect \
     jetpack-boost \
     amp \
-    sucuri-scanner \
     wordfence \
     wp-mail-smtp \
     cloudflare-flexible-ssl \

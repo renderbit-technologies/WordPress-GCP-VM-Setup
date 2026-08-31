@@ -14,7 +14,7 @@ Automated, production-ready scripts and Ansible playbooks to deploy a high-perfo
 | **TLS**          | Certbot / Let's Encrypt with auto-renewal                                      |
 | **Security**     | Fail2Ban (SSH jail), Unattended Upgrades, security headers, XML-RPC mitigation |
 | **Swap**         | Configurable swap file for low-memory VMs                                      |
-| **Auto-updates** | Weekly WP core/plugin/theme update cron + OS unattended-upgrades               |
+| **Auto-updates** | Weekly WP core/plugin/theme update cron + OS unattended-upgrades; WP-Cron events run via a 5-min system cron (page-load spawning disabled) |
 
 ## Prerequisites
 
@@ -77,7 +77,7 @@ See the dedicated [Ansible README](ansible/README.md) for full usage, variables,
 
 ### WordPress Hardening
 
-- `wp-config.php` constants: `DISALLOW_FILE_EDIT`, `FS_METHOD = 'direct'`, `FORCE_SSL_ADMIN`, `WP_AUTO_UPDATE_CORE = 'minor'`
+- `wp-config.php` constants: `DISALLOW_FILE_EDIT`, `FS_METHOD = 'direct'`, `FORCE_SSL_ADMIN`, `WP_AUTO_UPDATE_CORE = 'minor'`, `DISABLE_WP_CRON = true`
 - MU-plugin to disable XML-RPC pingback (DDoS mitigation)
 - Default `admin` user removed and replaced with a custom admin account
 - `readme.html` and `license.txt` removed from webroot
@@ -90,13 +90,21 @@ The following plugins are automatically installed (not activated — configure p
 - Jetpack, Jetpack Protect, Jetpack Boost
 - Akismet Anti-Spam
 - AMP
-- Sucuri Scanner
 - Wordfence Security
 - WP Mail SMTP
 - Cloudflare Flexible SSL
 - Google Analytics for WordPress (MonsterInsights)
 - UpdraftPlus Backup
 - Better Search Replace
+
+### WP-Cron
+
+`DISABLE_WP_CRON` is set in `wp-config.php`, so WordPress no longer spawns
+WP-Cron on page loads. Instead, `/etc/cron.d/wp-cron` runs
+`wp cron event run --due-now` every 5 minutes as `www-data`, logging to
+syslog via `logger -t wp-cron`. This prevents a heavy scheduled task (e.g. a
+security-plugin scan) from holding a PHP-FPM worker hostage on a live
+request.
 
 ### Nginx Configuration
 

@@ -749,7 +749,6 @@ sudo -H -u www-data -- wp --path="$WEB_ROOT" plugin install \
 	jetpack-protect \
 	jetpack-boost \
 	amp \
-	sucuri-scanner \
 	wordfence \
 	wp-mail-smtp \
 	cloudflare-flexible-ssl \
@@ -778,6 +777,34 @@ sed -i "s|PLACEHOLDER_DOCROOT|$WEB_ROOT|g" "$CRON_JOB"
 chmod 750 "$CRON_JOB"
 chown root:root "$CRON_JOB"
 log_success "Weekly update cron created."
+
+# -------------------------
+# System cron for WP-Cron (5-minute, replaces page-load spawning)
+# -------------------------
+# Written before the DISABLE_WP_CRON define below (nothing fallible in
+# between) so a mid-script abort never leaves the box with WP-Cron disabled
+# and no runner to replace it.
+WP_CRON_JOB="/etc/cron.d/wp-cron"
+cat >"$WP_CRON_JOB" <<WPCRON
+MAILTO=""
+*/5 * * * * www-data /usr/local/bin/wp --path=$WEB_ROOT cron event run --due-now --quiet 2>&1 | logger -t wp-cron
+WPCRON
+chmod 644 "$WP_CRON_JOB"
+chown root:root "$WP_CRON_JOB"
+log_success "System cron for WP-Cron created (runs every 5 minutes as www-data)."
+
+# -------------------------
+# Disable WP-Cron page-load spawning (system cron runner installed above)
+# -------------------------
+if ! grep -q "DISABLE_WP_CRON" "$WP_CONFIG"; then
+	log_info "Disabling WP-Cron page-load spawner (system cron runner installed instead)..."
+	sed -i "/require_once ABSPATH . 'wp-settings.php';/i \\
+\\
+/** WP-Cron handled by system cron (added by installer) */\\
+define('DISABLE_WP_CRON', true);" "$WP_CONFIG"
+else
+	log_info "DISABLE_WP_CRON already present in wp-config.php. Skipping."
+fi
 
 # -------------------------
 # Certbot (apt) - obtain TLS and configure nginx
@@ -932,7 +959,11 @@ systemctl reload nginx || true
 	echo "Notes:"
 	echo " - Webroot: $WEB_ROOT"
 	echo " - WP weekly update cron: $CRON_JOB"
+	echo " - WP-Cron: DISABLE_WP_CRON is set; WP-Cron events run via $WP_CRON_JOB every 5 minutes as www-data"
 	echo " - Certbot (apt) used to request TLS"
+	echo " - If activating Wordfence: set 'scan_maxDuration' and enable 'lowResourceScansEnabled' under Wordfence > All Options > General Options, to cap scan runtime on this VM's PHP-FPM pool"
+	echo " - If activating UpdraftPlus: set the backup schedule to an off-peak time to avoid contending with traffic for PHP-FPM workers"
+	echo " - sucuri-scanner is no longer installed by default; an old install on a previously-provisioned box is not removed automatically"
 } >"$CRED_FILE"
 
 chmod 600 "$CRED_FILE"
