@@ -31,15 +31,38 @@ ln -sf "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/systemctl-shim.sh" "${SHIM
 chmod +x "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/systemctl-shim.sh"
 export PATH="${SHIM_DIR}:${PATH}"
 
+ensure_mysql_socket() {
+	# PHP defaults to /var/run/mysqld/mysqld.sock; MariaDB may use /run/mysqld.
+	mkdir -p /var/run/mysqld
+	if [ -S /run/mysqld/mysqld.sock ] && [ ! -e /var/run/mysqld/mysqld.sock ]; then
+		ln -sf /run/mysqld/mysqld.sock /var/run/mysqld/mysqld.sock
+		log "Linked MySQL socket for PHP compatibility"
+	fi
+}
+
+wait_for_mysql() {
+	for _ in $(seq 1 30); do
+		if mysqladmin ping --silent 2>/dev/null; then
+			return 0
+		fi
+		sleep 1
+	done
+	log "Warning: MariaDB did not become ready in time"
+	return 1
+}
+
 # Only start services if the stack was provisioned
 if [ ! -f "${CRED_FILE}" ]; then
 	log "WordPress stack not yet provisioned; skipping service startup"
 	exit 0
 fi
 
-for svc in nginx mariadb php8.4-fpm cron; do
+for svc in mariadb cron nginx php8.4-fpm; do
 	start_service "${svc}"
 done
+
+ensure_mysql_socket
+wait_for_mysql || true
 
 # php8.4-fpm may need manual start if init script name differs
 if ! pgrep -f "php-fpm: master" >/dev/null 2>&1; then
