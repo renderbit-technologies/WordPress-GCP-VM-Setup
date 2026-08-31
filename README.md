@@ -101,10 +101,40 @@ The following plugins are automatically installed (not activated — configure p
 
 `DISABLE_WP_CRON` is set in `wp-config.php`, so WordPress no longer spawns
 WP-Cron on page loads. Instead, `/etc/cron.d/wp-cron` runs
-`wp cron event run --due-now` every 5 minutes as `www-data`, logging to
-syslog via `logger -t wp-cron`. This prevents a heavy scheduled task (e.g. a
-security-plugin scan) from holding a PHP-FPM worker hostage on a live
-request.
+`wp cron event run --due-now` every 5 minutes as `www-data` under a
+non-blocking `flock`, logging to syslog via `logger -t wp-cron`. This
+prevents a heavy scheduled task (e.g. a security-plugin scan) from holding
+a PHP-FPM worker hostage on a live request, and the lock stops a
+long-running task from stacking a new process on top of itself every 5
+minutes.
+
+### Upgrading an Existing Server
+
+Already-provisioned boxes don't need a full reprovision to pick up the
+WP-Cron migration or the Sucuri removal — both scripts are idempotent, so
+re-running them against an existing box applies just the new pieces
+(the WP-Cron runner, `DISABLE_WP_CRON`) without touching the existing site,
+database, or credentials:
+
+```bash
+sudo bash setup-wp-nginx.sh
+```
+
+or, for the Ansible path:
+
+```bash
+ansible-playbook -i inventory.ini playbook.yml
+```
+
+Re-running with the same `DOMAIN` (and leaving credential prompts blank in
+interactive mode) reuses the existing `/root/.wp-credentials` rather than
+rotating passwords. An existing `sucuri-scanner` install from before this
+change isn't removed automatically — deactivate/delete it manually if
+desired:
+
+```bash
+wp plugin deactivate sucuri-scanner && wp plugin delete sucuri-scanner
+```
 
 ### Nginx Configuration
 

@@ -560,8 +560,18 @@
       define('WP_AUTO_UPDATE_CORE', 'minor');
       if ( ! defined('FORCE_SSL_ADMIN') ) define('FORCE_SSL_ADMIN', true);
 
-      /** WP-Cron handled by system cron (added by installer) */
-      define('DISABLE_WP_CRON', true);
+# DISABLE_WP_CRON is set via `wp config set` below rather than in this
+# block: blockinfile always writes an unconditional define(), which on a
+# wp-config.php that already defines the constant elsewhere (e.g. as
+# false) would lose to PHP's first-definition-wins and silently leave
+# page-load spawning enabled. `wp config set` parses and converges the
+# actual value, matching the bash path.
+- name: Ensure DISABLE_WP_CRON is set to true
+  become: true
+  become_user: www-data
+  ansible.builtin.command: "wp config set DISABLE_WP_CRON true --raw --type=constant --path=/var/www/{{ domain }}"
+  changed_when: false
+  failed_when: false
 
 # --------------------------------------------------------
 # XML-RPC MU-Plugin

@@ -784,13 +784,17 @@ log_success "Weekly update cron created."
 # -------------------------
 # System cron for WP-Cron (5-minute, replaces page-load spawning)
 # -------------------------
-# Written before the DISABLE_WP_CRON define below (nothing fallible in
-# between) so a mid-script abort never leaves the box with WP-Cron disabled
-# and no runner to replace it.
+# Written before the DISABLE_WP_CRON change below - the only fallible step
+# between here and that change is the `wp config set` call itself; if it
+# fails, WP-Cron page-load spawning stays enabled (safe fallback) rather
+# than being disabled with no runner in place.
+# flock -n guards against overlap: a long-running scheduled event (e.g. a
+# stuck scan) would otherwise get a fresh wp-cli process stacked on top of
+# it every 5 minutes instead of one process running to completion.
 WP_CRON_JOB="/etc/cron.d/wp-cron"
 cat >"$WP_CRON_JOB" <<WPCRON
 MAILTO=""
-*/5 * * * * www-data /usr/local/bin/wp --path=$WEB_ROOT cron event run --due-now --quiet 2>&1 | logger -t wp-cron
+*/5 * * * * www-data flock -n /run/lock/wp-cron.lock /usr/local/bin/wp --path=$WEB_ROOT cron event run --due-now --quiet 2>&1 | logger -t wp-cron
 WPCRON
 chmod 644 "$WP_CRON_JOB"
 chown root:root "$WP_CRON_JOB"

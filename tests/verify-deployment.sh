@@ -162,11 +162,15 @@ else
 fi
 
 # --- WP-Cron disabled + system cron runner ---
+# Checks the actual runtime value via `wp eval`, not just whether the
+# constant name appears in the file - a grep for the name would also pass
+# on a stray `false` or a comment mentioning it.
 if [ -f "$WEB_ROOT/wp-config.php" ]; then
-	if grep -q "DISABLE_WP_CRON" "$WEB_ROOT/wp-config.php"; then
-		pass "DISABLE_WP_CRON is defined in wp-config.php"
+	WP_CRON_VALUE=$(wp --path="$WEB_ROOT" eval "echo defined('DISABLE_WP_CRON') && DISABLE_WP_CRON ? 'true' : 'false';" --allow-root 2>/dev/null || echo "error")
+	if [ "$WP_CRON_VALUE" = "true" ]; then
+		pass "DISABLE_WP_CRON is set to true in wp-config.php"
 	else
-		fail "DISABLE_WP_CRON is not defined in wp-config.php"
+		fail "DISABLE_WP_CRON is not set to true in wp-config.php (value: $WP_CRON_VALUE)"
 	fi
 else
 	info "Skipping DISABLE_WP_CRON check ($WEB_ROOT/wp-config.php does not exist)"
@@ -181,6 +185,15 @@ if [ -f /etc/cron.d/wp-cron ]; then
 	fi
 else
 	fail "/etc/cron.d/wp-cron not found"
+fi
+
+# The cron.d file is inert without the daemon actually running - if cron is
+# stopped, every scheduled task silently breaks once page-load spawning is
+# disabled, with nothing in the filesystem checks above to reveal that.
+if systemctl is-active --quiet cron 2>/dev/null; then
+	pass "cron daemon is active"
+else
+	fail "cron daemon is not active"
 fi
 
 # --- sucuri-scanner absent from a fresh install ---

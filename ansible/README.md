@@ -127,8 +127,10 @@ Enables auto-updates for all plugins and themes.
 
 #### WP-Cron
 
-- Sets `DISABLE_WP_CRON = true` in `wp-config.php` (part of the security-block `blockinfile` task) to stop WP-Cron from running on page loads.
-- Deploys `/etc/cron.d/wp-cron` (via `wp-cron.j2`) that runs `wp cron event run --due-now` every 5 minutes as `www-data`, logged via `logger -t wp-cron`.
+- Sets `DISABLE_WP_CRON` to `true` via `wp config set --raw --type=constant` (a dedicated task, not the security-block `blockinfile`, so it converges the actual value rather than losing to a pre-existing definition) to stop WP-Cron from running on page loads.
+- Deploys `/etc/cron.d/wp-cron` (via `wp-cron.j2`) that runs `wp cron event run --due-now` every 5 minutes as `www-data` under a non-blocking `flock`, logged via `logger -t wp-cron`.
+
+Already-provisioned boxes can adopt this without a full reprovision — just re-run `ansible-playbook -i inventory.ini playbook.yml`; both tasks are idempotent and the existing site/database/credentials are untouched.
 
 #### SSL with Certbot
 
