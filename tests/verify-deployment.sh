@@ -184,11 +184,16 @@ else
 fi
 
 # --- sucuri-scanner absent from a fresh install ---
+# Only informational when found: this script also runs against boxes
+# provisioned by an earlier version that did install sucuri-scanner, and an
+# existing install isn't removed on upgrade (see the credentials-file
+# note), so its presence there is expected, not a bug - don't hard-fail a
+# supported rerun/upgrade state.
 if [ -d "$WEB_ROOT/wp-content/plugins" ]; then
 	if [ ! -d "$WEB_ROOT/wp-content/plugins/sucuri-scanner" ]; then
 		pass "sucuri-scanner is not installed"
 	else
-		fail "sucuri-scanner directory found (should no longer be installed by default)"
+		info "sucuri-scanner is installed (expected if this box was provisioned before it was dropped from the default plugin list; not auto-removed on upgrade)"
 	fi
 else
 	info "Skipping sucuri-scanner check (wp-content/plugins not present)"

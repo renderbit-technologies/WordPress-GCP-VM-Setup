@@ -190,7 +190,7 @@ fi
 # -------------------------
 log_info "Updating system packages and repositories..."
 apt-get update -y
-apt-get install -y software-properties-common ca-certificates lsb-release apt-transport-https curl gnupg2 wget htop rsync zip unzip python3
+apt-get install -y software-properties-common ca-certificates lsb-release apt-transport-https curl gnupg2 wget htop rsync zip unzip python3 cron
 
 log_info "Adding Ondrej PHP PPA for PHP 8.4..."
 add-apt-repository -y ppa:ondrej/php
@@ -214,6 +214,9 @@ apt-get install -y nginx mariadb-server \
 log_info "Enabling services..."
 systemctl enable --now nginx
 systemctl enable --now php8.4-fpm
+# Explicitly ensured rather than assumed present/enabled: the WP-Cron
+# migration below relies on the cron daemon actually running /etc/cron.d.
+systemctl enable --now cron
 
 # -------------------------
 # PHP-FPM & PHP.ini tuning (FPM pool + opcache + php.ini)
@@ -796,15 +799,14 @@ log_success "System cron for WP-Cron created (runs every 5 minutes as www-data).
 # -------------------------
 # Disable WP-Cron page-load spawning (system cron runner installed above)
 # -------------------------
-if ! grep -q "DISABLE_WP_CRON" "$WP_CONFIG"; then
-	log_info "Disabling WP-Cron page-load spawner (system cron runner installed instead)..."
-	sed -i "/require_once ABSPATH . 'wp-settings.php';/i \\
-\\
-/** WP-Cron handled by system cron (added by installer) */\\
-define('DISABLE_WP_CRON', true);" "$WP_CONFIG"
-else
-	log_info "DISABLE_WP_CRON already present in wp-config.php. Skipping."
-fi
+# Uses `wp config set` rather than a grep/sed guard: a plain name match
+# would skip re-applying this if wp-config.php already contains the
+# constant with a different value (e.g. an existing `false`, or a comment
+# mentioning it), silently leaving page-load spawning enabled. `wp config
+# set` parses the actual constant and always converges it to `true`,
+# whether it's absent, already correct, or set to something else.
+log_info "Disabling WP-Cron page-load spawner (system cron runner installed instead)..."
+sudo -H -u www-data -- wp --path="$WEB_ROOT" config set DISABLE_WP_CRON true --raw --type=constant --allow-root
 
 # -------------------------
 # Certbot (apt) - obtain TLS and configure nginx
