@@ -14,7 +14,7 @@ Automated, production-ready scripts and Ansible playbooks to deploy a high-perfo
 | **TLS**          | Certbot / Let's Encrypt with auto-renewal                                      |
 | **Security**     | Fail2Ban (SSH jail), Unattended Upgrades, security headers, XML-RPC mitigation |
 | **Swap**         | Configurable swap file for low-memory VMs                                      |
-| **Auto-updates** | Weekly WP core/plugin/theme update cron + OS unattended-upgrades               |
+| **Auto-updates** | Weekly WP core/plugin/theme update cron + OS unattended-upgrades; WP-Cron events run via a 5-min system cron (page-load spawning disabled) |
 
 ## Prerequisites
 
@@ -77,7 +77,7 @@ See the dedicated [Ansible README](ansible/README.md) for full usage, variables,
 
 ### WordPress Hardening
 
-- `wp-config.php` constants: `DISALLOW_FILE_EDIT`, `FS_METHOD = 'direct'`, `FORCE_SSL_ADMIN`, `WP_AUTO_UPDATE_CORE = 'minor'`
+- `wp-config.php` constants: `DISALLOW_FILE_EDIT`, `FS_METHOD = 'direct'`, `FORCE_SSL_ADMIN`, `WP_AUTO_UPDATE_CORE = 'minor'`, `DISABLE_WP_CRON = true`
 - MU-plugin to disable XML-RPC pingback (DDoS mitigation)
 - Default `admin` user removed and replaced with a custom admin account
 - `readme.html` and `license.txt` removed from webroot
@@ -90,13 +90,51 @@ The following plugins are automatically installed (not activated — configure p
 - Jetpack, Jetpack Protect, Jetpack Boost
 - Akismet Anti-Spam
 - AMP
-- Sucuri Scanner
 - Wordfence Security
 - WP Mail SMTP
 - Cloudflare Flexible SSL
 - Google Analytics for WordPress (MonsterInsights)
 - UpdraftPlus Backup
 - Better Search Replace
+
+### WP-Cron
+
+`DISABLE_WP_CRON` is set in `wp-config.php`, so WordPress no longer spawns
+WP-Cron on page loads. Instead, `/etc/cron.d/wp-cron` runs
+`wp cron event run --due-now` every 5 minutes as `www-data` under a
+non-blocking `flock`, logging to syslog via `logger -t wp-cron`. This
+prevents a heavy scheduled task (e.g. a security-plugin scan) from holding
+a PHP-FPM worker hostage on a live request, and the lock stops a
+long-running task from stacking a new process on top of itself every 5
+minutes.
+
+### Upgrading an Existing Server
+
+Already-provisioned boxes don't need a full reprovision to pick up the
+WP-Cron migration or the Sucuri removal — both scripts are idempotent, so
+re-running them against an existing box applies just the new pieces
+(the WP-Cron runner, `DISABLE_WP_CRON`) without touching the existing site,
+database, or credentials:
+
+```bash
+sudo bash setup-wp-nginx.sh
+```
+
+or, for the Ansible path:
+
+```bash
+ansible-playbook -i inventory.ini playbook.yml
+```
+
+Re-running with the same `DOMAIN` (and leaving credential prompts blank in
+interactive mode) reuses the existing `/root/.wp-credentials` rather than
+rotating passwords. An existing `sucuri-scanner` install from before this
+change isn't removed automatically — deactivate/delete it manually if
+desired:
+
+```bash
+wp plugin deactivate sucuri-scanner && wp plugin delete sucuri-scanner
+```
 
 ### Nginx Configuration
 

@@ -98,6 +98,7 @@ This is the main role and handles everything from packages to a working WordPres
   - `DISALLOW_FILE_EDIT = true`
   - `WP_AUTO_UPDATE_CORE = 'minor'`
   - `FORCE_SSL_ADMIN = true`
+  - `DISABLE_WP_CRON = true`
   - SSL reverse proxy detection (`HTTP_X_FORWARDED_PROTO`)
 - Deploys an MU-plugin (`disable-xmlrpc-pingback.php`) to strip `X-Pingback` headers and disable `pingback.ping`.
 - Removes `readme.html` and `license.txt` from the webroot.
@@ -111,7 +112,6 @@ Installs (but does not activate) the following plugins:
 - Jetpack, Jetpack Protect, Jetpack Boost
 - Akismet Anti-Spam
 - AMP
-- Sucuri Scanner
 - Wordfence Security
 - WP Mail SMTP
 - Cloudflare Flexible SSL
@@ -124,6 +124,13 @@ Enables auto-updates for all plugins and themes.
 #### Weekly Update Cron
 
 - Deploys a `/etc/cron.weekly/wp-updates` script (via `wp-updates.sh.j2`) that runs `wp core update --minor`, `wp plugin update --all`, and `wp theme update --all`.
+
+#### WP-Cron
+
+- Sets `DISABLE_WP_CRON` to `true` via `wp config set --raw --type=constant` (a dedicated task, not the security-block `blockinfile`, so it converges the actual value rather than losing to a pre-existing definition) to stop WP-Cron from running on page loads.
+- Deploys `/etc/cron.d/wp-cron` (via `wp-cron.j2`) that runs `wp cron event run --due-now` every 5 minutes as `www-data` under a non-blocking `flock`, logged via `logger -t wp-cron`.
+
+Already-provisioned boxes can adopt this without a full reprovision — just re-run `ansible-playbook -i inventory.ini playbook.yml`; both tasks are idempotent and the existing site/database/credentials are untouched.
 
 #### SSL with Certbot
 

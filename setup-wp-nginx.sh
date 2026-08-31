@@ -190,7 +190,7 @@ fi
 # -------------------------
 log_info "Updating system packages and repositories..."
 apt-get update -y
-apt-get install -y software-properties-common ca-certificates lsb-release apt-transport-https curl gnupg2 wget htop rsync zip unzip python3
+apt-get install -y software-properties-common ca-certificates lsb-release apt-transport-https curl gnupg2 wget htop rsync zip unzip python3 cron
 
 log_info "Adding Ondrej PHP PPA for PHP 8.4..."
 add-apt-repository -y ppa:ondrej/php
@@ -214,6 +214,9 @@ apt-get install -y nginx mariadb-server \
 log_info "Enabling services..."
 systemctl enable --now nginx
 systemctl enable --now php8.4-fpm
+# Explicitly ensured rather than assumed present/enabled: the WP-Cron
+# migration below relies on the cron daemon actually running /etc/cron.d.
+systemctl enable --now cron
 
 # -------------------------
 # PHP-FPM & PHP.ini tuning (FPM pool + opcache + php.ini)
@@ -749,7 +752,6 @@ sudo -H -u www-data -- wp --path="$WEB_ROOT" plugin install \
 	jetpack-protect \
 	jetpack-boost \
 	amp \
-	sucuri-scanner \
 	wordfence \
 	wp-mail-smtp \
 	cloudflare-flexible-ssl \
@@ -778,6 +780,37 @@ sed -i "s|PLACEHOLDER_DOCROOT|$WEB_ROOT|g" "$CRON_JOB"
 chmod 750 "$CRON_JOB"
 chown root:root "$CRON_JOB"
 log_success "Weekly update cron created."
+
+# -------------------------
+# System cron for WP-Cron (5-minute, replaces page-load spawning)
+# -------------------------
+# Written before the DISABLE_WP_CRON change below - the only fallible step
+# between here and that change is the `wp config set` call itself; if it
+# fails, WP-Cron page-load spawning stays enabled (safe fallback) rather
+# than being disabled with no runner in place.
+# flock -n guards against overlap: a long-running scheduled event (e.g. a
+# stuck scan) would otherwise get a fresh wp-cli process stacked on top of
+# it every 5 minutes instead of one process running to completion.
+WP_CRON_JOB="/etc/cron.d/wp-cron"
+cat >"$WP_CRON_JOB" <<WPCRON
+MAILTO=""
+*/5 * * * * www-data flock -n /run/lock/wp-cron.lock /usr/local/bin/wp --path=$WEB_ROOT cron event run --due-now --quiet 2>&1 | logger -t wp-cron
+WPCRON
+chmod 644 "$WP_CRON_JOB"
+chown root:root "$WP_CRON_JOB"
+log_success "System cron for WP-Cron created (runs every 5 minutes as www-data)."
+
+# -------------------------
+# Disable WP-Cron page-load spawning (system cron runner installed above)
+# -------------------------
+# Uses `wp config set` rather than a grep/sed guard: a plain name match
+# would skip re-applying this if wp-config.php already contains the
+# constant with a different value (e.g. an existing `false`, or a comment
+# mentioning it), silently leaving page-load spawning enabled. `wp config
+# set` parses the actual constant and always converges it to `true`,
+# whether it's absent, already correct, or set to something else.
+log_info "Disabling WP-Cron page-load spawner (system cron runner installed instead)..."
+sudo -H -u www-data -- wp --path="$WEB_ROOT" config set DISABLE_WP_CRON true --raw --type=constant --allow-root
 
 # -------------------------
 # Certbot (apt) - obtain TLS and configure nginx
@@ -932,7 +965,11 @@ systemctl reload nginx || true
 	echo "Notes:"
 	echo " - Webroot: $WEB_ROOT"
 	echo " - WP weekly update cron: $CRON_JOB"
+	echo " - WP-Cron: DISABLE_WP_CRON is set; WP-Cron events run via $WP_CRON_JOB every 5 minutes as www-data"
 	echo " - Certbot (apt) used to request TLS"
+	echo " - If activating Wordfence: set 'scan_maxDuration' and enable 'lowResourceScansEnabled' under Wordfence > All Options > General Options, to cap scan runtime on this VM's PHP-FPM pool"
+	echo " - If activating UpdraftPlus: set the backup schedule to an off-peak time to avoid contending with traffic for PHP-FPM workers"
+	echo " - sucuri-scanner is no longer installed by default; an old install on a previously-provisioned box is not removed automatically"
 } >"$CRED_FILE"
 
 chmod 600 "$CRED_FILE"

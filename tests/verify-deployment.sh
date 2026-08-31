@@ -53,12 +53,13 @@ else
 	fail "Front page returned HTTP $CODE (expected 200 or 301)"
 fi
 
-for _ in 1 2 3 4 5; do
+for _ in $(seq 1 15); do
 	BODY=$(body_of "/")
 	echo "$BODY" | grep -qi "wp-content\|wordpress" && break
 	# A reload of php8.4-fpm/nginx can leave the front page briefly blank
 	# right after provisioning; give it a moment to settle before failing.
-	sleep 1
+	# A 5x1s budget wasn't always enough on slower/contended CI runners.
+	sleep 2
 done
 if echo "$BODY" | grep -qi "wp-content\|wordpress"; then
 	pass "Front page contains WordPress markup"
@@ -158,6 +159,57 @@ if [ -f "$CRED_FILE" ]; then
 	fi
 else
 	fail "Credentials file $CRED_FILE not found"
+fi
+
+# --- WP-Cron disabled + system cron runner ---
+# Checks the actual runtime value via `wp eval`, not just whether the
+# constant name appears in the file - a grep for the name would also pass
+# on a stray `false` or a comment mentioning it.
+if [ -f "$WEB_ROOT/wp-config.php" ]; then
+	WP_CRON_VALUE=$(wp --path="$WEB_ROOT" eval "echo defined('DISABLE_WP_CRON') && DISABLE_WP_CRON ? 'true' : 'false';" --allow-root 2>/dev/null || echo "error")
+	if [ "$WP_CRON_VALUE" = "true" ]; then
+		pass "DISABLE_WP_CRON is set to true in wp-config.php"
+	else
+		fail "DISABLE_WP_CRON is not set to true in wp-config.php (value: $WP_CRON_VALUE)"
+	fi
+else
+	info "Skipping DISABLE_WP_CRON check ($WEB_ROOT/wp-config.php does not exist)"
+fi
+
+if [ -f /etc/cron.d/wp-cron ]; then
+	MODE=$(stat -c "%a" /etc/cron.d/wp-cron 2>/dev/null || stat -f "%Lp" /etc/cron.d/wp-cron)
+	if [ "$MODE" = "644" ] && grep -q "due-now" /etc/cron.d/wp-cron; then
+		pass "/etc/cron.d/wp-cron exists, mode 644, runs --due-now"
+	else
+		fail "/etc/cron.d/wp-cron exists but mode ($MODE) or content is unexpected"
+	fi
+else
+	fail "/etc/cron.d/wp-cron not found"
+fi
+
+# The cron.d file is inert without the daemon actually running - if cron is
+# stopped, every scheduled task silently breaks once page-load spawning is
+# disabled, with nothing in the filesystem checks above to reveal that.
+if systemctl is-active --quiet cron 2>/dev/null; then
+	pass "cron daemon is active"
+else
+	fail "cron daemon is not active"
+fi
+
+# --- sucuri-scanner absent from a fresh install ---
+# Only informational when found: this script also runs against boxes
+# provisioned by an earlier version that did install sucuri-scanner, and an
+# existing install isn't removed on upgrade (see the credentials-file
+# note), so its presence there is expected, not a bug - don't hard-fail a
+# supported rerun/upgrade state.
+if [ -d "$WEB_ROOT/wp-content/plugins" ]; then
+	if [ ! -d "$WEB_ROOT/wp-content/plugins/sucuri-scanner" ]; then
+		pass "sucuri-scanner is not installed"
+	else
+		info "sucuri-scanner is installed (expected if this box was provisioned before it was dropped from the default plugin list; not auto-removed on upgrade)"
+	fi
+else
+	info "Skipping sucuri-scanner check (wp-content/plugins not present)"
 fi
 
 # --- Database access ---

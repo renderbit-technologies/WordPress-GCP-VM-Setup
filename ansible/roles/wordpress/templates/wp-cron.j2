@@ -1,0 +1,2 @@
+MAILTO=""
+*/5 * * * * www-data flock -n /run/lock/wp-cron.lock /usr/local/bin/wp --path=/var/www/{{ domain }} cron event run --due-now --quiet 2>&1 | logger -t wp-cron

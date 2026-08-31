@@ -229,7 +229,7 @@ When modifying shared functionality (e.g., WordPress hardening, Nginx config, PH
 
 Both Bash and Ansible paths implement identical hardening:
 
-- `wp-config.php` constants: `DISALLOW_FILE_EDIT`, `FS_METHOD='direct'`, `FORCE_SSL_ADMIN`, `WP_AUTO_UPDATE_CORE='minor'`
+- `wp-config.php` constants: `DISALLOW_FILE_EDIT`, `FS_METHOD='direct'`, `FORCE_SSL_ADMIN`, `WP_AUTO_UPDATE_CORE='minor'`, `DISABLE_WP_CRON=true`
 - MU-plugin: `disable-xmlrpc-pingback.php` removes `X-Pingback` header and disables `pingback.ping`
 - Removed files: `readme.html`, `license.txt` from webroot
 - Default `admin` user removed and replaced with configured admin

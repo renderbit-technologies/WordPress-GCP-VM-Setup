@@ -51,6 +51,7 @@
       - php8.4-imagick
       - certbot
       - python3-certbot-nginx
+      - cron
     state: present
 
 # --------------------------------------------------------
@@ -71,6 +72,14 @@
 - name: Enable and start MariaDB
   ansible.builtin.service:
     name: mariadb
+    state: started
+    enabled: true
+
+# Explicitly ensured rather than assumed present/enabled: the WP-Cron
+# migration below relies on the cron daemon actually running /etc/cron.d.
+- name: Enable and start cron
+  ansible.builtin.service:
+    name: cron
     state: started
     enabled: true
 
@@ -517,6 +526,21 @@
   changed_when: true
 
 # --------------------------------------------------------
+# WP-Cron System Cron Job (5-minute, replaces page-load spawning)
+# --------------------------------------------------------
+# Deployed before the "Inject security settings" task below (which sets
+# DISABLE_WP_CRON) so a mid-playbook failure never leaves the box with
+# WP-Cron disabled and no runner to replace it - task order is what closes
+# the gap here, not idempotency alone.
+- name: Deploy 5-minute WP-Cron system cron job
+  ansible.builtin.template:
+    src: wp-cron.j2
+    dest: /etc/cron.d/wp-cron
+    owner: root
+    group: root
+    mode: "0644"
+
+# --------------------------------------------------------
 # wp-config.php Security Injections
 # --------------------------------------------------------
 - name: Inject security settings into wp-config.php
@@ -535,6 +559,19 @@
       define('DISALLOW_FILE_EDIT', true);
       define('WP_AUTO_UPDATE_CORE', 'minor');
       if ( ! defined('FORCE_SSL_ADMIN') ) define('FORCE_SSL_ADMIN', true);
+
+# DISABLE_WP_CRON is set via `wp config set` below rather than in this
+# block: blockinfile always writes an unconditional define(), which on a
+# wp-config.php that already defines the constant elsewhere (e.g. as
+# false) would lose to PHP's first-definition-wins and silently leave
+# page-load spawning enabled. `wp config set` parses and converges the
+# actual value, matching the bash path.
+- name: Ensure DISABLE_WP_CRON is set to true
+  become: true
+  become_user: www-data
+  ansible.builtin.command: "wp config set DISABLE_WP_CRON true --raw --type=constant --path=/var/www/{{ domain }}"
+  changed_when: false
+  failed_when: false
 
 # --------------------------------------------------------
 # XML-RPC MU-Plugin
@@ -605,7 +642,6 @@
     jetpack-protect \
     jetpack-boost \
     amp \
-    sucuri-scanner \
     wordfence \
     wp-mail-smtp \
     cloudflare-flexible-ssl \
