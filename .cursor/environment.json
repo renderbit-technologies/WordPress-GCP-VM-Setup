@@ -1,0 +1,7 @@
+{
+  "name": "WordPress GCP VM Setup",
+  "user": "ubuntu",
+  "install": "bash .cursor/scripts/cloud-agent-install.sh",
+  "start": "sudo bash .cursor/scripts/cloud-agent-start.sh",
+  "ports": [80, 443]
+}

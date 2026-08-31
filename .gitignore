@@ -11,3 +11,4 @@ ansible/inventory.ini
 firebase-debug.log
 
 .claude/settings.local.json
+.cursor/scripts/shim-bin/
