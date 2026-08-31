@@ -1,0 +1,49 @@
+name: Task / chore
+description: A focused task, refactor, doc update, or CI improvement
+title: "[Task]: "
+labels: ["task"]
+body:
+  - type: textarea
+    id: objective
+    attributes:
+      label: Objective
+      description: What needs to be done and why?
+      placeholder: e.g. Refactor PHP-FPM pool sizing into shared logic; update CODEOWNERS
+    validations:
+      required: true
+
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: Scope, files, and implementation notes
+      placeholder: |
+        - Files: `setup-wp-nginx.sh`, `ansible/roles/wordpress/templates/`
+        - Keep effective-cores formula aligned: min(cpu_cores, max((ram_mb - 768)/480, 1))
+        - Preserve credential reuse from /root/.wp-credentials
+      render: markdown
+
+  - type: textarea
+    id: checklist
+    attributes:
+      label: Checklist
+      description: Break the work into subtasks
+      placeholder: |
+        - [ ] Subtask 1
+        - [ ] Subtask 2
+        - [ ] Verify with ShellCheck / ansible-playbook --syntax-check
+        - [ ] Test on Vagrant (bash + ansible)
+      render: markdown
+
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies / related work
+      description: Blockers, related issues, or PRs
+      placeholder: e.g. Blocked by #123; relates to #45
+
+  - type: input
+    id: cc
+    attributes:
+      label: Additional context
+      description: Links, references, or notes

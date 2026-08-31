@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Ask a question / support
+    url: https://github.com/renderbit-technologies/WordPress-GCP-VM-Setup/discussions
+    about: Use Discussions for questions, setup help, and general support
+  - name: Documentation
+    url: https://github.com/renderbit-technologies/WordPress-GCP-VM-Setup#readme
+    about: Check the README and ansible/README before opening an issue

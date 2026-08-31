@@ -1,0 +1,81 @@
+name: Feature request
+description: Suggest an enhancement or new capability
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Suggest an idea for this project. Keep scope focused — one feature per issue.
+
+  - type: dropdown
+    id: deployment_path
+    attributes:
+      label: Scope
+      description: Which deployment path(s) should the feature cover?
+      options:
+        - Both Bash and Ansible (keep aligned)
+        - Bash scripts only
+        - Ansible playbook only
+        - Documentation / CI / tooling
+        - Not sure
+      default: 0
+    validations:
+      required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: One-line description of the feature
+      placeholder: e.g. Add PHP 8.5 support via Ondrej PPA variable
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: Why is this needed? What problem does it solve? Who benefits?
+      placeholder: e.g. Ubuntu 24.04 users need... Current workaround is...
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: How should it work? Include config variables, role changes, or UX if relevant
+      placeholder: |
+        - New variable `PHP_VERSION` (default `8.4`)
+        - Update both `setup-wp-nginx.sh` and `ansible/roles/wordpress`
+        - Keep idempotency on re-runs
+      render: markdown
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other approaches you considered and why they were not chosen
+      placeholder: e.g. Considered separate PHP role but increases drift between paths
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Checklist for when this is done
+      placeholder: |
+        - [ ] Works on fresh Ubuntu 24.04 VM
+        - [ ] Idempotent on `vagrant provision` / re-run
+        - [ ] Both Bash and Ansible updated (if scope is Both)
+        - [ ] README / ansible/README updated
+        - [ ] ShellCheck / ansible-lint passes
+      render: markdown
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Mockups, examples, links to related issues or docs

@@ -1,0 +1,114 @@
+name: Bug report
+description: Report a problem with the Bash scripts or Ansible playbook
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Fill in the details below — clear steps help us reproduce and fix it faster.
+        **Do not paste secrets** from `/root/.wp-credentials` or any generated passwords.
+
+  - type: dropdown
+    id: deployment_path
+    attributes:
+      label: Deployment path affected
+      description: Which deployment path shows the bug?
+      options:
+        - Bash scripts (install.sh / setup-wp-nginx.sh / setup-swap.sh)
+        - Ansible playbook (ansible/playbook.yml)
+        - Both paths
+        - Not sure
+      default: 0
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Clear, concise description of the bug
+      placeholder: e.g. Nginx fails to start after second run of install.sh; WordPress shows 502 Bad Gateway after Ansible provision
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Exact steps to reproduce — include commands and variable values (redact secrets)
+      placeholder: |
+        1. Provision fresh Ubuntu 24.04 VM (e.g. e2-medium)
+        2. Run `DOMAIN="example.com" SKIP_CERTBOT=y sudo -E bash install.sh` (or `ansible-playbook -i inventory.ini playbook.yml`)
+        3. Observe error ...
+      render: bash
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should have happened?
+      placeholder: e.g. Idempotent re-run should succeed; Nginx should serve WordPress with security headers
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What actually happened? Include error messages.
+      placeholder: Paste relevant error output, truncated if long
+      render: text
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: OS / image
+      description: Target OS — this project supports Ubuntu 24.04 LTS only
+      options:
+        - Ubuntu 24.04 LTS (GCP)
+        - Ubuntu 24.04 LTS (Vagrant / local VM)
+        - Other Ubuntu version (unsupported)
+        - Other OS
+      default: 0
+    validations:
+      required: true
+
+  - type: input
+    id: machine_type
+    attributes:
+      label: GCP machine type / VM specs
+      description: e.g. e2-medium, e2-small, or Vagrant defaults
+      placeholder: e.g. e2-medium (2 vCPU, 4 GB RAM)
+
+  - type: input
+    id: domain
+    attributes:
+      label: Domain / DNS setup
+      description: Domain used and whether DNS was pointed to the VM (relevant for Certbot failures)
+      placeholder: e.g. example.com with A record → VM IP; or 192.168.56.10.nip.io (Vagrant); or SKIP_CERTBOT=y
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and diagnostics
+      description: Paste relevant logs. Redact secrets. Wrap in code fences.
+      placeholder: |
+        ```bash
+        sudo journalctl -u nginx --no-pager | tail -n 50
+        sudo nginx -t
+        sudo cat /var/log/nginx/error.log | tail -n 50
+        cat /root/.wp-credentials  # redact passwords before pasting
+        ```
+      render: bash
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Workaround, related issues, screenshots
+      placeholder: e.g. Worked on first run but failed on `vagrant provision` (idempotency); related to #123
