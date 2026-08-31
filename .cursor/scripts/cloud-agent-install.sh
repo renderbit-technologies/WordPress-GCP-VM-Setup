@@ -44,7 +44,7 @@ else
 fi
 
 # --- WordPress test stack (skip if already provisioned) ---
-if [ -f "${CRED_FILE}" ]; then
+if sudo test -f "${CRED_FILE}"; then
 	log "WordPress stack already provisioned (${CRED_FILE} exists); skipping installation"
 	exit 0
 fi
@@ -61,7 +61,7 @@ export PATH="${SHIM_DIR}:${PATH}"
 
 # Swap may be unsupported in containerized Cloud Agent VMs; continue without it.
 log "Attempting swap setup (optional in container environments)..."
-if ! sudo bash ./setup-swap.sh 2>/dev/null; then
+if ! sudo env SWAP_SIZE="${SWAP_SIZE:-1G}" CONT="${CONT:-y}" bash ./setup-swap.sh 2>/dev/null; then
 	log "Swap setup skipped (not supported in this environment)"
 fi
 

@@ -52,7 +52,7 @@ wait_for_mysql() {
 }
 
 # Only start services if the stack was provisioned
-if [ ! -f "${CRED_FILE}" ]; then
+if ! sudo test -f "${CRED_FILE}"; then
 	log "WordPress stack not yet provisioned; skipping service startup"
 	exit 0
 fi

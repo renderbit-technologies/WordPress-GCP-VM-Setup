@@ -7,7 +7,13 @@ shift || true
 
 start_svc() {
 	local svc=$1
-	service "${svc}" start 2>/dev/null || "/etc/init.d/${svc}" start 2>/dev/null || true
+	service "${svc}" start 2>/dev/null || "/etc/init.d/${svc}" start
+}
+
+run_svc_cmd() {
+	local svc=$1
+	local action=$2
+	service "${svc}" "${action}" 2>/dev/null || "/etc/init.d/${svc}" "${action}"
 }
 
 svc_from_unit() {
@@ -37,7 +43,7 @@ case "${cmd}" in
 		unit="${1:-}"
 		[ -n "${unit}" ] || exit 0
 		svc=$(svc_from_unit "${unit}")
-		service "${svc}" "${cmd}" 2>/dev/null || "/etc/init.d/${svc}" "${cmd}" 2>/dev/null || true
+		run_svc_cmd "${svc}" "${cmd}"
 		;;
 	stop)
 		unit="${1:-}"
@@ -56,7 +62,11 @@ case "${cmd}" in
 		done
 		[ -n "${unit}" ] || exit 3
 		svc=$(svc_from_unit "${unit}")
-		if service "${svc}" status 2>/dev/null | grep -qiE 'running|active'; then
+		if service "${svc}" status >/dev/null 2>&1; then
+			echo active
+			exit 0
+		fi
+		if "/etc/init.d/${svc}" status >/dev/null 2>&1; then
 			echo active
 			exit 0
 		fi
