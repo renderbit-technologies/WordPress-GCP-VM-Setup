@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    timeout-minutes: 60
+    timeout-minutes: 75
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -66,10 +66,13 @@ jobs:
 
       - name: Run vagrant up
         # Must exceed attempts x (attempt timeout + 60s kill grace) + retry
-        # delay + cleanup (~44m), or this step kills the retry mid-flight.
-        timeout-minutes: 50
+        # delay + cleanup (~64m), or this step kills the retry mid-flight.
+        # 30m per attempt covers provisioning over slow mirrors (~30m seen
+        # for Ansible on 2026-10-07); the job limit leaves room for setup,
+        # verify and idempotency on top.
+        timeout-minutes: 66
         env:
-          VAGRANT_UP_ATTEMPT_TIMEOUT_SECONDS: 1200
+          VAGRANT_UP_ATTEMPT_TIMEOUT_SECONDS: 1800
         run: |
           sudo rmmod kvm_amd || true
           sudo rmmod kvm_intel || true

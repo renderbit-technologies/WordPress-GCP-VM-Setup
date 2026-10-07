@@ -8,7 +8,7 @@ attempts="${VAGRANT_UP_ATTEMPTS:-2}"
 retry_delay="${VAGRANT_UP_RETRY_DELAY_SECONDS:-30}"
 # Caps each attempt so a stall after boot (e.g. apt hanging inside the
 # provisioner) is retried instead of running until the job is cancelled.
-attempt_timeout="${VAGRANT_UP_ATTEMPT_TIMEOUT_SECONDS:-1200}"
+attempt_timeout="${VAGRANT_UP_ATTEMPT_TIMEOUT_SECONDS:-1800}"
 
 cd "$workdir"
 
