@@ -24,6 +24,11 @@ Vagrant.configure("2") do |config|
     vb.gui = false
   end
 
+  # Use HTTPS for Ubuntu's mirrors before ansible_local installs Ansible via
+  # apt (see script header)
+  config.vm.provision "shell", name: "https-apt-mirrors",
+    path: "../tests/vagrant/use-https-apt-mirrors.sh"
+
   # Ansible Provisioner - runs locally on the guest
   config.vm.provision "ansible_local" do |ansible|
     ansible.playbook = "playbook.yml"

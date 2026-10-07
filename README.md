@@ -170,9 +170,11 @@ wp plugin deactivate sucuri-scanner && wp plugin delete sucuri-scanner
 │       ├── wordpress/          # Nginx, PHP, MariaDB, WP-CLI, WordPress, phpMyAdmin
 │       └── security/           # Fail2Ban, Unattended Upgrades, file permissions
 ├── tests/
-│   └── bash/                   # Vagrant-based test harness for shell scripts
-│       ├── Vagrantfile         # Test VM with env-var driven provisioning
-│       └── README.md           # Test harness documentation
+│   ├── bash/                   # Vagrant-based test harness for shell scripts
+│   │   ├── Vagrantfile         # Test VM with env-var driven provisioning
+│   │   └── README.md           # Test harness documentation
+│   └── vagrant/
+│       └── use-https-apt-mirrors.sh  # Switches test VMs' Ubuntu mirrors to HTTPS
 ├── .github/
 │   ├── dependabot.yml          # Dependabot config for GitHub Actions
 │   └── workflows/

@@ -71,6 +71,8 @@ It defaults `SKIP_CERTBOT=y` so the test stays self-contained and does not requi
 
 The `Vagrantfile` sets environment variables to run the scripts in non-interactive mode. It mounts the project root to `/vagrant` inside the VM.
 
+Before the scripts run, [`tests/vagrant/use-https-apt-mirrors.sh`](../vagrant/use-https-apt-mirrors.sh) switches the guest's Ubuntu apt mirrors to HTTPS, so an outage of Canonical's plain-HTTP mirrors doesn't break the test. The Ansible harness does the same.
+
 ### Environment Variables
 
 The following environment variables control script behaviour during provisioning. All values in the `Vagrantfile` are **test-only credentials** and must never be used in production.
