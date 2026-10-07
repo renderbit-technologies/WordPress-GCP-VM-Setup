@@ -71,7 +71,7 @@ It defaults `SKIP_CERTBOT=y` so the test stays self-contained and does not requi
 
 The `Vagrantfile` sets environment variables to run the scripts in non-interactive mode. It mounts the project root to `/vagrant` inside the VM.
 
-Before the scripts run, [`tests/vagrant/use-https-apt-mirrors.sh`](../vagrant/use-https-apt-mirrors.sh) switches the guest's Ubuntu apt mirrors to HTTPS, so an outage of Canonical's plain-HTTP mirrors doesn't break the test. The Ansible harness does the same.
+Before the scripts run, [`tests/vagrant/configure-apt-mirror.sh`](../vagrant/configure-apt-mirror.sh) points the guest's Ubuntu apt sources at the Azure mirror (`azure.archive.ubuntu.com`, where GitHub's runners live), falling back to Canonical over HTTPS, so an outage or slowdown of Canonical's plain-HTTP mirrors doesn't break the test. The Ansible harness does the same.
 
 ### Environment Variables
 

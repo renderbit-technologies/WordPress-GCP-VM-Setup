@@ -174,7 +174,7 @@ wp plugin deactivate sucuri-scanner && wp plugin delete sucuri-scanner
 │   │   ├── Vagrantfile         # Test VM with env-var driven provisioning
 │   │   └── README.md           # Test harness documentation
 │   └── vagrant/
-│       └── use-https-apt-mirrors.sh  # Switches test VMs' Ubuntu mirrors to HTTPS
+│       └── configure-apt-mirror.sh   # Points test VMs at the Azure mirror (Canonical HTTPS fallback)
 ├── .github/
 │   ├── dependabot.yml          # Dependabot config for GitHub Actions
 │   └── workflows/
