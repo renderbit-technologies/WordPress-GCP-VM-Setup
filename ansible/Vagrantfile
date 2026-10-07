@@ -24,6 +24,11 @@ Vagrant.configure("2") do |config|
     vb.gui = false
   end
 
+  # Pick a reachable Ubuntu mirror before ansible_local installs Ansible via
+  # apt (see script header)
+  config.vm.provision "shell", name: "apt-mirror",
+    path: "../tests/vagrant/configure-apt-mirror.sh"
+
   # Ansible Provisioner - runs locally on the guest
   config.vm.provision "ansible_local" do |ansible|
     ansible.playbook = "playbook.yml"
