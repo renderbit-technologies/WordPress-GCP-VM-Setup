@@ -39,7 +39,10 @@ jobs:
           restore-keys: ${{ runner.os }}-vagrant-
 
       - name: Install VirtualBox
-        timeout-minutes: 10
+        # Usually ~1m; a slow runner mirror took ~15m on 2026-10-07 while
+        # still making progress. 20m still fails a real stall (42m on
+        # 2026-08-19) well before the job limit.
+        timeout-minutes: 20
         run: |
           sudo apt-get update
           # Removing virtualbox-ext-pack as it requires interactive license acceptance
