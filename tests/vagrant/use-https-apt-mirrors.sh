@@ -17,11 +17,21 @@ if [[ ! -s /etc/ssl/certs/ca-certificates.crt ]]; then
   exit 0
 fi
 
+# Only the files apt actually reads; installer backups (e.g. *.orig) in
+# sources.list.d are ignored by apt and left alone.
 shopt -s nullglob
+apt_source_files=()
 for file in /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do
-  [[ -f "$file" ]] || continue
+  if [[ -f "$file" ]]; then
+    apt_source_files+=("$file")
+  fi
+done
+
+for file in "${apt_source_files[@]}"; do
   sed -i -E 's#http://(([a-z]{2}\.)?archive|security)\.ubuntu\.com/#https://\1.ubuntu.com/#g' "$file"
 done
 
-echo "Ubuntu apt sources:"
-grep -rhE '^(URIs:|deb )' /etc/apt/sources.list /etc/apt/sources.list.d/ 2>/dev/null | sort -u || true
+echo "Active apt sources:"
+for file in "${apt_source_files[@]}"; do
+  grep -HE '^(URIs:|deb )' "$file" || true
+done
