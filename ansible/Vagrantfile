@@ -6,8 +6,10 @@ Vagrant.configure("2") do |config|
   # Using bento/ubuntu-24.04 as it is reliable and widely available
   config.vm.box = "bento/ubuntu-24.04"
 
-  # Increase boot timeout for slow CI environments
-  config.vm.boot_timeout = 1500
+  # A healthy boot on GitHub Actions takes ~30s; a hung boot never recovers.
+  # Keep this short so .github/scripts/run-vagrant-up-with-retry.sh can
+  # destroy the VM and retry quickly instead of burning the job's budget.
+  config.vm.boot_timeout = 300
 
   # Configure a private network for easy access
   config.vm.network "private_network", ip: "192.168.56.10"

@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    timeout-minutes: 60
+    timeout-minutes: 75
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -41,12 +41,17 @@ jobs:
           restore-keys: ${{ runner.os }}-vagrant-
 
       - name: Install VirtualBox
+        # Usually ~1m; a slow runner mirror took ~15m on 2026-10-07 while
+        # still making progress. 20m still fails a real stall (42m on
+        # 2026-08-19) well before the job limit.
+        timeout-minutes: 20
         run: |
           sudo apt-get update
           # Removing virtualbox-ext-pack as it requires interactive license acceptance
           sudo apt-get install -y virtualbox
 
       - name: Install Vagrant
+        timeout-minutes: 5
         run: |
           wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
           echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
@@ -55,6 +60,14 @@ jobs:
           vagrant --version
 
       - name: Run vagrant up
+        # Must exceed attempts x (attempt timeout + 60s kill grace) + retry
+        # delay + cleanup (~64m), or this step kills the retry mid-flight.
+        # 30m per attempt covers provisioning over slow mirrors (~30m seen
+        # for Ansible on 2026-10-07); the job limit leaves room for setup,
+        # verify and idempotency on top.
+        timeout-minutes: 66
+        env:
+          VAGRANT_UP_ATTEMPT_TIMEOUT_SECONDS: 1800
         run: |
           sudo rmmod kvm_amd || true
           sudo rmmod kvm_intel || true
@@ -62,6 +75,7 @@ jobs:
           bash .github/scripts/run-vagrant-up-with-retry.sh tests/bash
 
       - name: Verify deployment (internal)
+        timeout-minutes: 5
         run: |
           cd tests/bash
           # The full verification already runs inside the Vagrant provisioner;
@@ -69,6 +83,7 @@ jobs:
           vagrant ssh -c 'cd /vagrant && sudo env DOMAIN=vagrant.local WP_DB=wp_test WP_DB_USER=wp_user WP_DB_PASS=secure_wp_password bash tests/verify-deployment.sh'
 
       - name: Idempotency check
+        timeout-minutes: 15
         run: |
           cd tests/bash
           vagrant provision
