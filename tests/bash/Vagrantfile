@@ -23,6 +23,10 @@ Vagrant.configure("2") do |config|
     vb.gui = false
   end
 
+  # Pick a reachable Ubuntu mirror before anything runs apt (see script header)
+  config.vm.provision "shell", name: "apt-mirror",
+    path: "../vagrant/configure-apt-mirror.sh"
+
   # Shell Provisioner
   config.vm.provision "shell", inline: <<-SHELL
     set -e

@@ -274,6 +274,7 @@ A `Vagrantfile` is included for local testing using a disposable VM.
 
    This will:
    - Boot an Ubuntu 24.04 VM (`bento/ubuntu-24.04`) with 2 GB RAM and 2 CPUs.
+   - Point the guest's Ubuntu apt sources at the Azure mirror, falling back to Canonical over HTTPS ([`tests/vagrant/configure-apt-mirror.sh`](../tests/vagrant/configure-apt-mirror.sh)), so an outage or slowdown of Canonical's plain-HTTP mirrors doesn't break the test.
    - Install Ansible on the guest via the `ansible_local` provisioner.
    - Run the playbook with test overrides: domain `192.168.56.10.nip.io`, SSL disabled. Passwords are left blank so the playbook auto-generates and saves them to `/root/.wp-credentials`, same as a real run.
    - Run [`tests/verify-deployment.sh`](../tests/verify-deployment.sh) to check the site, phpMyAdmin, blocked paths, swap, and the credentials file.
