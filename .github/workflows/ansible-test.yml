@@ -36,12 +36,14 @@ jobs:
           restore-keys: ${{ runner.os }}-vagrant-
 
       - name: Install VirtualBox
+        timeout-minutes: 10
         run: |
           sudo apt-get update
           # Removing virtualbox-ext-pack as it requires interactive license acceptance
           sudo apt-get install -y virtualbox
 
       - name: Install Vagrant
+        timeout-minutes: 5
         run: |
           wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
           echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
@@ -50,6 +52,7 @@ jobs:
           vagrant --version
 
       - name: Install Ansible
+        timeout-minutes: 5
         run: |
           sudo apt-get install -y ansible
           ansible --version
@@ -62,6 +65,11 @@ jobs:
           ansible-playbook playbook.yml --syntax-check
 
       - name: Run vagrant up
+        # Must exceed attempts x (attempt timeout + 60s kill grace) + retry
+        # delay + cleanup (~44m), or this step kills the retry mid-flight.
+        timeout-minutes: 50
+        env:
+          VAGRANT_UP_ATTEMPT_TIMEOUT_SECONDS: 1200
         run: |
           sudo rmmod kvm_amd || true
           sudo rmmod kvm_intel || true
@@ -69,6 +77,7 @@ jobs:
           bash .github/scripts/run-vagrant-up-with-retry.sh ansible
 
       - name: Verify deployment (internal)
+        timeout-minutes: 5
         run: |
           cd ansible
           # The full verification already runs inside the Vagrant provisioner;
@@ -76,6 +85,7 @@ jobs:
           vagrant ssh -c 'DOMAIN="192.168.56.10.nip.io" WP_DB="wpdb" WP_DB_USER="wpuser" sudo -E bash /vagrant-tests/verify-deployment.sh'
 
       - name: Idempotency check
+        timeout-minutes: 15
         run: |
           cd ansible
           vagrant provision
