@@ -25,7 +25,12 @@ on:
 
 jobs:
   vagrant-test:
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest moves to Ubuntu 26 from 2026-10-19
+    # (actions/runner-images#14748). This job depends on the runner's
+    # release: distro VirtualBox (vs. the rmmod kvm* steps and the
+    # bento/ubuntu-24.04 guest additions), the HashiCorp apt suite from
+    # `lsb_release -cs`. Unpin once verified on ubuntu-26.04.
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     timeout-minutes: 75
