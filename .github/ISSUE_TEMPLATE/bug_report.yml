@@ -38,7 +38,7 @@ body:
       label: Steps to reproduce
       description: Exact steps to reproduce — include commands and variable values (redact secrets)
       placeholder: |
-        1. Provision fresh Ubuntu 24.04 VM (e.g. e2-medium)
+        1. Provision fresh Ubuntu 24.04 or 26.04 VM (e.g. e2-medium)
         2. Run `DOMAIN="example.com" SKIP_CERTBOT=y sudo -E bash install.sh` (or `ansible-playbook -i inventory.ini playbook.yml`)
         3. Observe error ...
       render: bash
@@ -68,10 +68,12 @@ body:
     id: os
     attributes:
       label: OS / image
-      description: Target OS — this project supports Ubuntu 24.04 LTS only
+      description: Target OS — this project supports Ubuntu 24.04 LTS and 26.04 LTS
       options:
         - Ubuntu 24.04 LTS (GCP)
         - Ubuntu 24.04 LTS (Vagrant / local VM)
+        - Ubuntu 26.04 LTS (GCP)
+        - Ubuntu 26.04 LTS (Vagrant / local VM)
         - Other Ubuntu version (unsupported)
         - Other OS
       default: 0

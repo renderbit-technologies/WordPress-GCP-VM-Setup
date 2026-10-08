@@ -2,8 +2,14 @@
 # vi: set ft=ruby :
 
 Vagrant.configure("2") do |config|
-  # Use Ubuntu 24.04 LTS (Noble Numbat)
-  config.vm.box = "bento/ubuntu-24.04"
+  # Ubuntu 24.04 LTS (Noble Numbat) by default; set UBUNTU_VERSION=26.04 to
+  # test Ubuntu 26.04 LTS (Resolute Raccoon). Keep it set for later
+  # `vagrant provision`/`vagrant ssh` calls against the same VM.
+  ubuntu_version = ENV.fetch("UBUNTU_VERSION", "24.04")
+  unless ["24.04", "26.04"].include?(ubuntu_version)
+    abort "Unsupported UBUNTU_VERSION=#{ubuntu_version} (expected 24.04 or 26.04)"
+  end
+  config.vm.box = "bento/ubuntu-#{ubuntu_version}"
 
   # A healthy boot on GitHub Actions takes ~30s; a hung boot never recovers.
   # Keep this short so .github/scripts/run-vagrant-up-with-retry.sh can

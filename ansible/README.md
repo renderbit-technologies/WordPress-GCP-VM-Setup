@@ -29,7 +29,7 @@ This is the main role and handles everything from packages to a working WordPres
 
 #### Package Installation
 
-- Adds the Ondrej PPA for PHP and the official nginx.org repository for Nginx.
+- Adds Ondrej Surý's PHP repository (`ppa:ondrej/php` on 24.04, `packages.sury.org/php` on 26.04, where the PPA is not published) and the official nginx.org repository for Nginx.
 - Installs Nginx, MariaDB, PHP 8.4 (FPM, CLI, and extensions: mysql, xml, curl, mbstring, zip, gd, intl, opcache, imagick), Certbot with Nginx plugin.
 
 #### PHP-FPM Tuning
@@ -209,7 +209,7 @@ These are populated automatically and should not be overridden:
 ## Requirements
 
 - **Ansible** 2.9+
-- **Target server**: Ubuntu 20.04 / 22.04 / 24.04 (recommended)
+- **Target server**: Ubuntu 24.04 LTS or 26.04 LTS (the playbook fails fast on anything else)
 - **SSH access** to the target server
 - **`ansible.posix` and `community.mysql` collections**:
 
@@ -273,7 +273,7 @@ A `Vagrantfile` is included for local testing using a disposable VM.
    ```
 
    This will:
-   - Boot an Ubuntu 24.04 VM (`bento/ubuntu-24.04`) with 2 GB RAM and 2 CPUs.
+   - Boot an Ubuntu 24.04 VM (`bento/ubuntu-24.04`) with 2 GB RAM and 2 CPUs. Set `UBUNTU_VERSION=26.04` to boot `bento/ubuntu-26.04` instead, and keep it set for later `vagrant provision`/`vagrant ssh` calls.
    - Point the guest's Ubuntu apt sources at the Azure mirror, falling back to Canonical over HTTPS ([`tests/vagrant/configure-apt-mirror.sh`](../tests/vagrant/configure-apt-mirror.sh)), so an outage or slowdown of Canonical's plain-HTTP mirrors doesn't break the test.
    - Install Ansible on the guest via the `ansible_local` provisioner.
    - Run the playbook with test overrides: domain `192.168.56.10.nip.io`, SSL disabled. Passwords are left blank so the playbook auto-generates and saves them to `/root/.wp-credentials`, same as a real run.
@@ -309,7 +309,7 @@ ansible/
 ├── ansible.cfg                                     # Ansible settings (pipelining, Python interpreter)
 ├── inventory.ini                                   # Target host inventory
 ├── playbook.yml                                    # Main playbook (vars, prompts, role execution)
-├── Vagrantfile                                     # Local test VM (Ubuntu 24.04, VirtualBox)
+├── Vagrantfile                                     # Local test VM (Ubuntu 24.04 or 26.04, VirtualBox)
 ├── README.md                                       # This file
 └── roles/
     ├── common/

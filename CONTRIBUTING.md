@@ -67,4 +67,4 @@ The process described here has several goals:
 
 ## Testing Changes
 
-Since this project involves system-level changes (installing packages, modifying configs), **please test your changes on a fresh Ubuntu 24.04 LTS VM** before submitting a PR. This ensures that the scripts interact correctly with a clean environment.
+Since this project involves system-level changes (installing packages, modifying configs), **please test your changes on a fresh Ubuntu 24.04 LTS or 26.04 LTS VM** before submitting a PR. This ensures that the scripts interact correctly with a clean environment.

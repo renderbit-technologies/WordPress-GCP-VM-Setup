@@ -28,9 +28,18 @@ jobs:
     # Pinned: ubuntu-latest moves to Ubuntu 26 from 2026-10-19
     # (actions/runner-images#14748). This job depends on the runner's
     # release: distro VirtualBox (vs. the rmmod kvm_amd step and the
-    # bento/ubuntu-24.04 guest additions), the HashiCorp apt suite from
+    # bento/ubuntu-* guest additions), the HashiCorp apt suite from
     # `lsb_release -cs`. Unpin once verified on ubuntu-26.04.
     runs-on: ubuntu-24.04
+    name: vagrant-test (Ubuntu ${{ matrix.ubuntu }} guest)
+    strategy:
+      fail-fast: false
+      matrix:
+        ubuntu: ["24.04", "26.04"]
+    # Job-level so `vagrant up`, `vagrant provision` and `vagrant ssh` all
+    # evaluate the Vagrantfile against the same box.
+    env:
+      UBUNTU_VERSION: ${{ matrix.ubuntu }}
     permissions:
       contents: read
     timeout-minutes: 75
@@ -42,8 +51,8 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.vagrant.d/boxes
-          key: ${{ runner.os }}-vagrant-${{ hashFiles('tests/bash/Vagrantfile') }}
-          restore-keys: ${{ runner.os }}-vagrant-
+          key: ${{ runner.os }}-vagrant-${{ matrix.ubuntu }}-${{ hashFiles('tests/bash/Vagrantfile') }}
+          restore-keys: ${{ runner.os }}-vagrant-${{ matrix.ubuntu }}-
 
       - name: Detect host CPU
         id: cpu

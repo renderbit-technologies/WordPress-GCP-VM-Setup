@@ -42,7 +42,7 @@ Validation flows:
   vagrant provision
   ```
 
-- Hosted-runner style flow on disposable Ubuntu 24.04:
+- Hosted-runner style flow on disposable Ubuntu 24.04 or 26.04:
 
   ```bash
   sudo bash tests/bash/run-on-runner.sh initial

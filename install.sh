@@ -4,9 +4,21 @@ set -euo pipefail
 # Setup script for a new WordPress VM on GCP
 # curl -fsSL https://raw.githubusercontent.com/renderbit-technologies/WordPress-GCP-VM-Setup/main/install.sh -o install.sh && sudo bash install.sh
 
-# Run as root on Ubuntu/Debian: sudo bash install.sh
+# Run as root on Ubuntu 24.04 LTS or 26.04 LTS: sudo bash install.sh
 if [ "$(id -u)" -ne 0 ]; then
 	echo "Please run as root: sudo $0"
+	exit 1
+fi
+
+# setup-wp-nginx.sh checks this too, but by then swap has already been set
+# up; fail before touching the system at all.
+# shellcheck source=/dev/null
+OS_ID=$(. /etc/os-release && echo "${ID:-}")
+# shellcheck source=/dev/null
+OS_CODENAME=$(. /etc/os-release && echo "${VERSION_CODENAME:-}")
+if [ "$OS_ID" != "ubuntu" ] || { [ "$OS_CODENAME" != "noble" ] && [ "$OS_CODENAME" != "resolute" ]; }; then
+	echo "Unsupported OS: ${OS_ID:-unknown} ${OS_CODENAME:-unknown}."
+	echo "Supported: Ubuntu 24.04 LTS (noble) and Ubuntu 26.04 LTS (resolute)."
 	exit 1
 fi
 

@@ -13,11 +13,11 @@ applyTo: "tests/bash/**"
 
 # Runner Assumptions
 
-- `tests/bash/run-on-runner.sh` is designed for a disposable Ubuntu 24.04 runner and must be executed as root with `sudo`.
+- `tests/bash/run-on-runner.sh` is designed for a disposable Ubuntu 24.04 or 26.04 runner and must be executed as root with `sudo`.
 - The hosted-runner path appends the test domain to `/etc/hosts`, runs against `127.0.0.1`, and defaults `SKIP_CERTBOT=y` so CI does not require public DNS or Let's Encrypt.
 - Keep runner verification tolerant of the current expected responses: HTTP `200` or `301`.
 - Avoid adding checks that rely on interactive shells, public DNS, or long-lived machine state.
-- The Vagrant path uses VirtualBox, mounts the repo at `/vagrant`, and provisions an Ubuntu 24.04 VM with fixed test values.
+- The Vagrant path uses VirtualBox, mounts the repo at `/vagrant`, and provisions an Ubuntu 24.04 VM (or 26.04 with `UBUNTU_VERSION=26.04`) with fixed test values.
 
 # Test-Only Credentials
 
@@ -36,7 +36,7 @@ applyTo: "tests/bash/**"
   vagrant provision
   ```
 
-- Hosted-runner style validation on a disposable Ubuntu 24.04 VM:
+- Hosted-runner style validation on a disposable Ubuntu 24.04 or 26.04 VM:
 
   ```bash
   sudo bash tests/bash/run-on-runner.sh initial

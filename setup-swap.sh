@@ -3,6 +3,7 @@ set -euo pipefail
 
 # setup-swap.sh
 # Configure a swapfile with persistence (User-defined size)
+# Supported targets: Ubuntu 24.04 LTS (noble) and Ubuntu 26.04 LTS (resolute)
 #
 # Supported Environment Variables:
 #   SWAP_SIZE         (Optional) Size of the swap file (e.g., 1G, 2G, 4G).

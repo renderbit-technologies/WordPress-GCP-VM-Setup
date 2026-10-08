@@ -25,7 +25,7 @@ It also includes `run-on-runner.sh`, a hosted-runner integration harness for Git
    vagrant up
    ```
 
-   This will automatically provision the VM using the scripts.
+   This will automatically provision the VM using the scripts. It boots Ubuntu 24.04 (`bento/ubuntu-24.04`) by default; run `UBUNTU_VERSION=26.04 vagrant up` to test Ubuntu 26.04 instead, and keep `UBUNTU_VERSION` set for later `vagrant provision`/`vagrant ssh` calls.
 
 3. Verify the installation:
    The provisioner runs verification steps automatically. If the `vagrant up` command completes successfully, the tests passed.
@@ -50,7 +50,7 @@ It also includes `run-on-runner.sh`, a hosted-runner integration harness for Git
 
 ## Running the Hosted-Runner Harness Manually
 
-On a disposable Ubuntu 24.04 VM, run:
+On a disposable Ubuntu 24.04 or 26.04 VM, run:
 
 ```bash
 sudo bash tests/bash/run-on-runner.sh initial
