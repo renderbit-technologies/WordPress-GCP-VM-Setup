@@ -24,7 +24,7 @@ jobs:
   vagrant-test:
     # Pinned: ubuntu-latest moves to Ubuntu 26 from 2026-10-19
     # (actions/runner-images#14748). This job depends on the runner's
-    # release: distro VirtualBox (vs. the rmmod kvm* steps and the
+    # release: distro VirtualBox (vs. the rmmod kvm_amd step and the
     # bento/ubuntu-24.04 guest additions), the HashiCorp apt suite from
     # `lsb_release -cs`, and distro Ansible. Unpin once verified on
     # ubuntu-26.04.
@@ -42,6 +42,25 @@ jobs:
           path: ~/.vagrant.d/boxes
           key: ${{ runner.os }}-vagrant-${{ hashFiles('ansible/Vagrantfile') }}
           restore-keys: ${{ runner.os }}-vagrant-
+
+      - name: Detect host CPU
+        id: cpu
+        run: |
+          vendor="$(awk -F': ' '/^vendor_id/ {print $2; exit}' /proc/cpuinfo)"
+          echo "vendor=${vendor}" >> "$GITHUB_OUTPUT"
+          lscpu | grep -E 'Vendor ID|Model name|Hypervisor vendor|Virtualization' || true
+          lsmod | grep -E '^kvm' || true
+
+      # A lost runner ("The hosted runner lost communication with the server")
+      # keeps no job log, but GitHub still records which steps ran or were
+      # skipped, so exactly one of these two marks the host CPU on every run.
+      - name: "Host CPU: Intel"
+        if: steps.cpu.outputs.vendor == 'GenuineIntel'
+        run: "true"
+
+      - name: "Host CPU: AMD"
+        if: steps.cpu.outputs.vendor == 'AuthenticAMD'
+        run: "true"
 
       - name: Install VirtualBox
         # Usually ~1m; a slow runner mirror took ~15m on 2026-10-07 while
@@ -85,9 +104,12 @@ jobs:
         env:
           VAGRANT_UP_ATTEMPT_TIMEOUT_SECONDS: 1800
         run: |
+          # AMD hosts: VirtualBox fails with VERR_SVM_IN_USE while kvm_amd is
+          # loaded. Intel hosts: leave kvm_intel alone. With it unloaded, the
+          # VirtualBox boot takes the whole runner down ("The hosted runner
+          # lost communication with the server", no log); see PR #43. kvm
+          # itself stays loaded either way (vboxdrv depends on it).
           sudo rmmod kvm_amd || true
-          sudo rmmod kvm_intel || true
-          sudo rmmod kvm || true
           bash .github/scripts/run-vagrant-up-with-retry.sh ansible
 
       - name: Verify deployment (internal)
