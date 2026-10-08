@@ -212,6 +212,20 @@ else
 	info "Skipping sucuri-scanner check (wp-content/plugins not present)"
 fi
 
+# --- OPcache loaded with our tuning (FPM SAPI, not CLI) ---
+# Capture before grepping: with pipefail, `grep -q` exiting on the first
+# match would SIGPIPE php-fpm mid-output and fail the check spuriously.
+if [ -x /usr/sbin/php-fpm8.4 ]; then
+	FPM_INFO=$(/usr/sbin/php-fpm8.4 -i 2>/dev/null || true)
+	if grep -q '^opcache.memory_consumption => 256 ' <<<"$FPM_INFO"; then
+		pass "OPcache is loaded in PHP-FPM with memory_consumption=256"
+	else
+		fail "OPcache is not loaded in PHP-FPM, or memory_consumption is not 256"
+	fi
+else
+	fail "/usr/sbin/php-fpm8.4 not found"
+fi
+
 # --- Database access ---
 # WP_DB_PASS may be auto-generated (e.g. by the Ansible path) and unknown to
 # the caller; fall back to parsing it out of the credentials file.

@@ -292,7 +292,9 @@ fi
 log_info "Configuring OPcache..."
 OPCACHE_CONF="/etc/php/8.4/mods-available/opcache.ini"
 cat >"$OPCACHE_CONF" <<'OPC'
-; Enable OPcache
+; configuration for php opcache module
+; priority=10
+zend_extension=opcache.so
 opcache.enable=1
 opcache.enable_cli=0
 opcache.memory_consumption=256
@@ -321,6 +323,8 @@ else
 	cd "$TMPDIR"
 	wget -q https://www.phpmyadmin.net/downloads/phpMyAdmin-latest-all-languages.zip -O pma.zip
 
+# This replaces the package's own opcache.ini, so it must keep the
+# zend_extension line that loads the module, or OPcache stays off.
 	PMA_SHA256_EXPECTED=$(curl -fsSL https://www.phpmyadmin.net/downloads/phpMyAdmin-latest-all-languages.zip.sha256 | awk '{print $1}')
 	PMA_SHA256_ACTUAL=$(sha256sum pma.zip | awk '{print $1}')
 	if [ "$PMA_SHA256_EXPECTED" != "$PMA_SHA256_ACTUAL" ]; then
