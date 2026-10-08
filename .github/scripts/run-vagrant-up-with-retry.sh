@@ -9,8 +9,46 @@ retry_delay="${VAGRANT_UP_RETRY_DELAY_SECONDS:-30}"
 # Caps each attempt so a stall after boot (e.g. apt hanging inside the
 # provisioner) is retried instead of running until the job is cancelled.
 attempt_timeout="${VAGRANT_UP_ATTEMPT_TIMEOUT_SECONDS:-1800}"
+# How often the background monitor writes a one-line host resource summary
+# into the step log, so a starved runner leaves a trail; 0 disables it.
+monitor_interval="${VAGRANT_UP_MONITOR_INTERVAL_SECONDS:-60}"
 
 cd "$workdir"
+
+host_summary() {
+  local load mem swap
+  load="$(cut -d' ' -f1-3 /proc/loadavg 2>/dev/null || echo '?')"
+  mem="$(free -m 2>/dev/null | awk '/^Mem:/ {print $3 " used/" $7 " avail"}')"
+  swap="$(free -m 2>/dev/null | awk '/^Swap:/ {print $3 " used"}')"
+  echo "[host $(date -u +%H:%M:%S)] load ${load} | mem MiB ${mem:-?} | swap MiB ${swap:-?} | VBoxHeadless $(pgrep -c -x VBoxHeadless || true)"
+}
+
+print_host_resources() {
+  echo "::group::Host resources"
+  uptime || true
+  free -m || true
+  ps -eo pid,ppid,pgid,stat,etimes,pcpu,rss,comm --sort=-pcpu | head -15 || true
+  pgrep -a 'VBox|vagrant|ssh' || true
+  echo "::endgroup::"
+}
+
+start_resource_monitor() {
+  [[ "$monitor_interval" -gt 0 ]] || return 0
+  (
+    sleep_pid=""
+    # Kill the pending sleep too, so it can't hold the step's stdout open
+    # after the script exits.
+    trap 'kill "$sleep_pid" 2>/dev/null; exit 0' TERM
+    while true; do
+      host_summary
+      sleep "$monitor_interval" &
+      sleep_pid=$!
+      wait "$sleep_pid"
+    done
+  ) &
+  monitor_pid=$!
+  trap 'kill "$monitor_pid" 2>/dev/null || true' EXIT
+}
 
 print_diagnostics() {
   echo "::group::Vagrant diagnostics"
@@ -26,6 +64,7 @@ print_diagnostics() {
   fi
 
   echo "::endgroup::"
+  print_host_resources
 }
 
 cleanup_failed_attempt() {
@@ -38,7 +77,10 @@ cleanup_failed_attempt() {
   fi
 
   echo "::endgroup::"
+  print_host_resources
 }
+
+start_resource_monitor
 
 for attempt in $(seq 1 "$attempts"); do
   log_file="${RUNNER_TEMP:-/tmp}/vagrant-up-$(basename "$workdir")-attempt-${attempt}.log"
