@@ -24,7 +24,7 @@ jobs:
   vagrant-test:
     # Pinned: ubuntu-latest moves to Ubuntu 26 from 2026-10-19
     # (actions/runner-images#14748). This job depends on the runner's
-    # release: distro VirtualBox (vs. the rmmod kvm* steps and the
+    # release: distro VirtualBox (vs. the rmmod kvm_amd step and the
     # bento/ubuntu-24.04 guest additions), the HashiCorp apt suite from
     # `lsb_release -cs`, and distro Ansible. Unpin once verified on
     # ubuntu-26.04.
@@ -104,9 +104,12 @@ jobs:
         env:
           VAGRANT_UP_ATTEMPT_TIMEOUT_SECONDS: 1800
         run: |
+          # AMD hosts: VirtualBox fails with VERR_SVM_IN_USE while kvm_amd is
+          # loaded. Intel hosts: leave kvm_intel alone. With it unloaded, the
+          # VirtualBox boot takes the whole runner down ("The hosted runner
+          # lost communication with the server", no log); see PR #43. kvm
+          # itself stays loaded either way (vboxdrv depends on it).
           sudo rmmod kvm_amd || true
-          sudo rmmod kvm_intel || true
-          sudo rmmod kvm || true
           bash .github/scripts/run-vagrant-up-with-retry.sh ansible
 
       - name: Verify deployment (internal)
