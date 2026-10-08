@@ -1,13 +1,13 @@
 # WordPress Deployment on GCP
 
-Automated, production-ready scripts and Ansible playbooks to deploy a high-performance, hardened WordPress stack on Google Cloud Platform — optimised for **Ubuntu 24.04 LTS**.
+Automated, production-ready scripts and Ansible playbooks to deploy a high-performance, hardened WordPress stack on Google Cloud Platform — optimised for **Ubuntu 24.04 LTS** and **Ubuntu 26.04 LTS**.
 
 ## Stack
 
 | Component        | Details                                                                        |
 | ---------------- | ------------------------------------------------------------------------------ |
 | **Web server**   | Nginx (official nginx.org repo)                                                |
-| **PHP**          | 8.4 FPM — pool sizing tuned to available CPU cores and RAM, OPcache enabled    |
+| **PHP**          | 8.4 FPM (Ondrej Surý's packages) — pool sizing tuned to CPU cores and RAM, OPcache enabled |
 | **Database**     | MariaDB with root hardening and dedicated WP user                              |
 | **CMS**          | WordPress (latest) installed via WP-CLI                                        |
 | **Database UI**  | phpMyAdmin (latest, auto-configured)                                           |
@@ -18,7 +18,7 @@ Automated, production-ready scripts and Ansible playbooks to deploy a high-perfo
 
 ## Prerequisites
 
-- A GCP VM instance (or any Ubuntu server) running **Ubuntu 24.04 LTS**.
+- A GCP VM instance (or any Ubuntu server) running **Ubuntu 24.04 LTS** or **Ubuntu 26.04 LTS**. Other releases are rejected up front.
 - `bash` and `curl` installed (present by default).
 - A valid domain name with DNS A record pointing to the VM's external IP.
 - GCP VPC firewall rules allowing **TCP 80** and **TCP 443** ingress.

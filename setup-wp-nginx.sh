@@ -2,7 +2,8 @@
 set -euo pipefail
 
 # setup-wp-nginx.sh
-# Installs nginx (official nginx.org repo) + PHP 8.4 (Ondrej PPA) + MariaDB + WordPress + phpMyAdmin with hardening
+# Installs nginx (official nginx.org repo) + PHP 8.4 (Ondrej Surý's packages) + MariaDB + WordPress + phpMyAdmin with hardening
+# Supported targets: Ubuntu 24.04 LTS (noble) and Ubuntu 26.04 LTS (resolute)
 #
 # Supported Environment Variables:
 #   DOMAIN            (Required) Domain to install WordPress for (e.g., example.com)
@@ -53,6 +54,21 @@ trap 'error_handler ${LINENO}' ERR
 # -------------------------
 if [ "$(id -u)" -ne 0 ]; then
 	log_error "Please run as root: sudo $0"
+	exit 1
+fi
+
+# -------------------------
+# OS check
+# -------------------------
+# Read /etc/os-release rather than lsb_release: this runs before any package
+# is installed, and minimal images may not ship lsb-release yet.
+# shellcheck source=/dev/null
+OS_ID=$(. /etc/os-release && echo "${ID:-}")
+# shellcheck source=/dev/null
+OS_CODENAME=$(. /etc/os-release && echo "${VERSION_CODENAME:-}")
+if [ "$OS_ID" != "ubuntu" ] || { [ "$OS_CODENAME" != "noble" ] && [ "$OS_CODENAME" != "resolute" ]; }; then
+	log_error "Unsupported OS: ${OS_ID:-unknown} ${OS_CODENAME:-unknown}."
+	log_info "Supported: Ubuntu 24.04 LTS (noble) and Ubuntu 26.04 LTS (resolute)."
 	exit 1
 fi
 
@@ -186,14 +202,29 @@ else
 fi
 
 # -------------------------
-# System packages, Ondrej PHP PPA for PHP 8.4, and official Nginx repository
+# System packages, Ondrej Surý's PHP 8.4 packages, and official Nginx repository
 # -------------------------
 log_info "Updating system packages and repositories..."
 apt-get update -y
 apt-get install -y software-properties-common ca-certificates lsb-release apt-transport-https curl gnupg2 wget htop rsync zip unzip python3 cron
 
-log_info "Adding Ondrej PHP PPA for PHP 8.4..."
-add-apt-repository -y ppa:ondrej/php
+# ppa:ondrej/php is not published for resolute; Ondrej ships PHP for 26.04
+# from packages.sury.org instead. Noble stays on the PPA so existing 24.04
+# sites keep the package source they were installed from.
+if [ "$OS_CODENAME" = "noble" ]; then
+	log_info "Adding Ondrej PHP PPA for PHP 8.4..."
+	add-apt-repository -y ppa:ondrej/php
+else
+	log_info "Adding packages.sury.org PHP repository for PHP 8.4..."
+	# Re-fetched on every run: the signing key carries an expiry that
+	# upstream extends, and nothing else (no keyring package in the repo)
+	# would pick up the extended key.
+	curl -fsSL https://packages.sury.org/php/apt.gpg \
+		-o /usr/share/keyrings/deb.sury.org-php.gpg
+	echo "deb [signed-by=/usr/share/keyrings/deb.sury.org-php.gpg] \
+https://packages.sury.org/php/ $OS_CODENAME main" \
+		>/etc/apt/sources.list.d/php.list
+fi
 
 log_info "Adding official Nginx repository..."
 if [ ! -f /usr/share/keyrings/nginx-archive-keyring.gpg ]; then
@@ -201,7 +232,7 @@ if [ ! -f /usr/share/keyrings/nginx-archive-keyring.gpg ]; then
     | gpg --dearmor -o /usr/share/keyrings/nginx-archive-keyring.gpg
 fi
 echo "deb [signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] \
-http://nginx.org/packages/ubuntu $(lsb_release -cs) nginx" \
+http://nginx.org/packages/ubuntu $OS_CODENAME nginx" \
   > /etc/apt/sources.list.d/nginx.list
 printf 'Package: *\nPin: origin nginx.org\nPin-Priority: 900\n' \
   > /etc/apt/preferences.d/99nginx
@@ -291,8 +322,12 @@ fi
 # Configure OPcache for performance
 log_info "Configuring OPcache..."
 OPCACHE_CONF="/etc/php/8.4/mods-available/opcache.ini"
+# This replaces the package's own opcache.ini, so it must keep the
+# zend_extension line that loads the module, or OPcache stays off.
 cat >"$OPCACHE_CONF" <<'OPC'
-; Enable OPcache
+; configuration for php opcache module
+; priority=10
+zend_extension=opcache.so
 opcache.enable=1
 opcache.enable_cli=0
 opcache.memory_consumption=256

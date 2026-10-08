@@ -32,6 +32,17 @@
     swap_size: "2G"
 
   pre_tasks:
+    - name: Fail fast on an unsupported OS release
+      ansible.builtin.assert:
+        that:
+          - ansible_distribution == "Ubuntu"
+          - ansible_distribution_release in ["noble", "resolute"]
+        fail_msg: >-
+          Unsupported OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+          ({{ ansible_distribution_release }}). Supported: Ubuntu 24.04 LTS (noble)
+          and Ubuntu 26.04 LTS (resolute).
+        quiet: true
+
     # Re-running the playbook with blank vars_prompt answers must NOT rotate
     # passwords that are already live on the box (DB auth, MySQL root auth).
     # Reuse whatever was recorded on a prior run before falling back to

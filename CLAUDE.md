@@ -4,12 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This repository maintains two deployment paths for a production-ready WordPress stack on Ubuntu 24.04 LTS:
+This repository maintains two deployment paths for a production-ready WordPress stack on Ubuntu 24.04 LTS and Ubuntu 26.04 LTS (other releases fail fast):
 
 - **Bash scripts**: Root-level scripts for interactive or CI deployment
 - **Ansible playbook**: Idempotent, repeatable provisioning in `ansible/`
 
-The stack includes: Nginx (official nginx.org repo), PHP 8.4 FPM (Ondrej PPA), MariaDB, WordPress (latest), phpMyAdmin, Certbot (Let's Encrypt), Fail2Ban, and unattended upgrades.
+The stack includes: Nginx (official nginx.org repo), PHP 8.4 FPM (Ondrej Surý: `ppa:ondrej/php` on 24.04, `packages.sury.org/php` on 26.04), MariaDB, WordPress (latest), phpMyAdmin, Certbot (Let's Encrypt), Fail2Ban, and unattended upgrades.
 
 ## Command Reference
 
@@ -21,7 +21,7 @@ The stack includes: Nginx (official nginx.org repo), PHP 8.4 FPM (Ondrej PPA), M
 # Lint with ShellCheck (if available)
 shellcheck *.sh
 
-# Run full integration test with Vagrant
+# Run full integration test with Vagrant (UBUNTU_VERSION=26.04 for 26.04)
 cd tests/bash && vagrant up
 
 # Test idempotency
@@ -123,7 +123,7 @@ When modifying shared functionality (e.g., WordPress hardening, Nginx config, PH
 
 **WordPress Stack** (`setup-wp-nginx.sh` or `wordpress` role):
 
-1. **Packages**: official nginx.org repo → Nginx; Ondrej PPA → PHP 8.4 FPM + extensions; MariaDB from the distro repo
+1. **Packages**: official nginx.org repo → Nginx; Ondrej Surý's repo (PPA on 24.04, packages.sury.org on 26.04) → PHP 8.4 FPM + extensions; MariaDB from the distro repo
 2. **PHP-FPM Tuning**: Dynamic pool sizing based on CPU cores and available RAM (`pm.max_children = cores × 5`, capped so the box's RAM isn't oversubscribed)
 3. **OPcache**: 256MB memory, 10K accelerated files
 4. **MariaDB**: Creates WP database/user, removes anonymous users, sets root password

@@ -1,6 +1,6 @@
 # Project Overview
 
-**WordPress GCP VM Setup** is a project containing automated, production-ready bash scripts and Ansible playbooks designed to deploy a high-performance, hardened WordPress stack on Google Cloud Platform (or any VM) running **Ubuntu 24.04 LTS**.
+**WordPress GCP VM Setup** is a project containing automated, production-ready bash scripts and Ansible playbooks designed to deploy a high-performance, hardened WordPress stack on Google Cloud Platform (or any VM) running **Ubuntu 24.04 LTS** or **Ubuntu 26.04 LTS**.
 
 The deployed stack consists of:
 
@@ -61,5 +61,5 @@ Local testing is facilitated via Vagrant, utilizing disposable VirtualBox VMs.
   - Quote valid references (e.g., `"$VAR"`).
   - Use functions to modularize code.
   - Lint with [ShellCheck](https://www.shellcheck.net/).
-- **Testing Changes:** All changes must be tested on a fresh Ubuntu 24.04 LTS VM before submitting pull requests.
+- **Testing Changes:** All changes must be tested on a fresh Ubuntu 24.04 LTS or 26.04 LTS VM before submitting pull requests.
 - **CI/CD:** GitHub Actions are configured to run ShellCheck, Codacy Security Scans, and Vagrant-based integration tests for both Bash and Ansible changes.

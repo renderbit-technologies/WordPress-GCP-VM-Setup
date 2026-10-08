@@ -30,7 +30,7 @@ Closes #
 
 ## How tested
 <!-- How did you verify this? Check what you ran and add commands/output where useful. -->
-- [ ] Fresh Ubuntu 24.04 LTS VM (GCP or Vagrant)
+- [ ] Fresh Ubuntu 24.04 LTS and 26.04 LTS VMs (GCP or Vagrant)
 - [ ] Bash path: `shellcheck *.sh` — pass
 - [ ] Bash path: `cd tests/bash && vagrant up` — pass (or `tests/bash/run-on-runner.sh`)
 - [ ] Idempotency: re-ran `vagrant provision` / `sudo bash install.sh` — no drift

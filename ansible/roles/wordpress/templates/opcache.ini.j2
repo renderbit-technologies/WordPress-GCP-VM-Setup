@@ -1,4 +1,8 @@
-; Enable OPcache
+; configuration for php opcache module
+; priority=10
+; Replaces the package's own opcache.ini, so it must keep the zend_extension
+; line that loads the module, or OPcache stays off.
+zend_extension=opcache.so
 opcache.enable=1
 opcache.enable_cli=0
 opcache.memory_consumption=256

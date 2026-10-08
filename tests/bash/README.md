@@ -2,7 +2,7 @@
 
 This directory contains a Vagrant environment for testing the bash installation scripts (`setup-swap.sh`, `setup-wp-nginx.sh`).
 
-Both this harness and the Ansible harness (`ansible/Vagrantfile`) verify the resulting deployment with the same shared script, [`tests/verify-deployment.sh`](../verify-deployment.sh). It checks: front page and `wp-login.php` respond, the front page actually renders WordPress markup (not a blank page), phpMyAdmin is reachable, sensitive paths (`wp-config.php`, `xmlrpc.php`, hidden files, PHP execution under `wp-content/uploads`) are blocked, uploads over nginx's default 1MB limit are accepted, swap is active, and `/root/.wp-credentials` exists with mode `600`.
+Both this harness and the Ansible harness (`ansible/Vagrantfile`) verify the resulting deployment with the same shared script, [`tests/verify-deployment.sh`](../verify-deployment.sh). It checks: front page and `wp-login.php` respond, the front page actually renders WordPress markup (not a blank page), phpMyAdmin is reachable, sensitive paths (`wp-config.php`, `xmlrpc.php`, hidden files, PHP execution under `wp-content/uploads`) are blocked, uploads over nginx's default 1MB limit are accepted, OPcache is loaded in PHP-FPM, swap is active, and `/root/.wp-credentials` exists with mode `600`.
 
 It also includes `run-on-runner.sh`, a hosted-runner integration harness for GitHub Actions. That path runs the scripts directly on an ephemeral Ubuntu runner and skips Certbot so CI does not depend on nested virtualization or public DNS.
 
@@ -25,7 +25,7 @@ It also includes `run-on-runner.sh`, a hosted-runner integration harness for Git
    vagrant up
    ```
 
-   This will automatically provision the VM using the scripts.
+   This will automatically provision the VM using the scripts. It boots Ubuntu 24.04 (`bento/ubuntu-24.04`) by default; run `UBUNTU_VERSION=26.04 vagrant up` to test Ubuntu 26.04 instead, and keep `UBUNTU_VERSION` set for later `vagrant provision`/`vagrant ssh` calls.
 
 3. Verify the installation:
    The provisioner runs verification steps automatically. If the `vagrant up` command completes successfully, the tests passed.
@@ -50,7 +50,7 @@ It also includes `run-on-runner.sh`, a hosted-runner integration harness for Git
 
 ## Running the Hosted-Runner Harness Manually
 
-On a disposable Ubuntu 24.04 VM, run:
+On a disposable Ubuntu 24.04 or 26.04 VM, run:
 
 ```bash
 sudo bash tests/bash/run-on-runner.sh initial

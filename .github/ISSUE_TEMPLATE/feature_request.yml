@@ -67,7 +67,7 @@ body:
       label: Acceptance criteria
       description: Checklist for when this is done
       placeholder: |
-        - [ ] Works on fresh Ubuntu 24.04 VM
+        - [ ] Works on fresh Ubuntu 24.04 and 26.04 VMs
         - [ ] Idempotent on `vagrant provision` / re-run
         - [ ] Both Bash and Ansible updated (if scope is Both)
         - [ ] README / ansible/README updated
