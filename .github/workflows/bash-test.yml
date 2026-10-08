@@ -45,6 +45,25 @@ jobs:
           key: ${{ runner.os }}-vagrant-${{ hashFiles('tests/bash/Vagrantfile') }}
           restore-keys: ${{ runner.os }}-vagrant-
 
+      - name: Detect host CPU
+        id: cpu
+        run: |
+          vendor="$(awk -F': ' '/^vendor_id/ {print $2; exit}' /proc/cpuinfo)"
+          echo "vendor=${vendor}" >> "$GITHUB_OUTPUT"
+          lscpu | grep -E 'Vendor ID|Model name|Hypervisor vendor|Virtualization' || true
+          lsmod | grep -E '^kvm' || true
+
+      # A lost runner ("The hosted runner lost communication with the server")
+      # keeps no job log, but GitHub still records which steps ran or were
+      # skipped, so exactly one of these two marks the host CPU on every run.
+      - name: "Host CPU: Intel"
+        if: steps.cpu.outputs.vendor == 'GenuineIntel'
+        run: "true"
+
+      - name: "Host CPU: AMD"
+        if: steps.cpu.outputs.vendor == 'AuthenticAMD'
+        run: "true"
+
       - name: Install VirtualBox
         # Usually ~1m; a slow runner mirror took ~15m on 2026-10-07 while
         # still making progress. 20m still fails a real stall (42m on
