@@ -83,7 +83,7 @@ jobs:
         # verify and idempotency on top.
         timeout-minutes: 66
         env:
-          VAGRANT_UP_ATTEMPT_TIMEOUT_SECONDS: 1800
+          VAGRANT_UP_ATTEMPT_TIMEOUT_SECONDS: 300 # TEMP repro, revert before merge
         run: |
           sudo rmmod kvm_amd || true
           sudo rmmod kvm_intel || true
