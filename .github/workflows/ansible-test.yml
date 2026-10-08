@@ -22,14 +22,15 @@ on:
 
 jobs:
   vagrant-test:
-    # Pinned: ubuntu-latest moves to Ubuntu 26 from 2026-10-19
-    # (actions/runner-images#14748). This job depends on the runner's
-    # release: distro VirtualBox (vs. the rmmod kvm_amd step and the
-    # bento/ubuntu-* guest additions), the HashiCorp apt suite from
-    # `lsb_release -cs`, and distro Ansible. Unpin once verified on
-    # ubuntu-26.04.
-    runs-on: ubuntu-24.04
-    name: vagrant-test (Ubuntu ${{ matrix.ubuntu }} guest)
+    # Host and guest share the Ubuntu release: the host's distro VirtualBox
+    # must be able to import the guest box. bento/ubuntu-26.04 is an EFI box
+    # exported from VirtualBox 7.1+ (NVRAM item, settings 1.19), which noble's
+    # VirtualBox 7.0 rejects; resolute ships 7.2. Pinned explicitly rather
+    # than ubuntu-latest, since this job also depends on the runner's
+    # release for the rmmod kvm_amd step, the HashiCorp apt suite from
+    # `lsb_release -cs` and distro Ansible.
+    runs-on: ubuntu-${{ matrix.ubuntu }}
+    name: vagrant-test (Ubuntu ${{ matrix.ubuntu }})
     strategy:
       fail-fast: false
       matrix:
