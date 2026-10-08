@@ -9,7 +9,7 @@ The playbook executes four roles in sequence:
 ### 1. `common` — System Packages
 
 - Updates the `apt` cache (with 1-hour validity window).
-- Installs essential system utilities: `curl`, `gnupg2`, `wget`, `htop`, `rsync`, `zip`, `unzip`, `git`, `python3`, `python3-pip`, and others.
+- Installs essential system utilities: `curl`, `gnupg2`, `wget`, `htop`, `rsync`, `zip`, `unzip`, `git`, `python3`, and others.
 - Installs `acl` (required for Ansible `become_user` with unprivileged users).
 - Installs `python3-pymysql` (required by the `community.mysql` Ansible collection).
 
