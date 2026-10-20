@@ -22,14 +22,16 @@ on:
 
 jobs:
   vagrant-test:
-    # Host and guest share the Ubuntu release: the host's distro VirtualBox
-    # must be able to import the guest box. bento/ubuntu-26.04 is an EFI box
-    # exported from VirtualBox 7.1+ (NVRAM item, settings 1.19), which noble's
-    # VirtualBox 7.0 rejects; resolute ships 7.2. Pinned explicitly rather
-    # than ubuntu-latest, since this job also depends on the runner's
-    # release for the rmmod kvm_amd step, the HashiCorp apt suite from
-    # `lsb_release -cs` and distro Ansible.
-    runs-on: ubuntu-${{ matrix.ubuntu }}
+    # Every guest runs on an ubuntu-26.04 host, regardless of the guest's
+    # release. noble's VirtualBox 7.0.16 DKMS module no longer builds on the
+    # ubuntu-24.04 runner image's 7.0 kernel (from image 20261018), while
+    # resolute's VirtualBox 7.2 does, and a newer VirtualBox imports older
+    # boxes, so it also handles bento/ubuntu-26.04, an EFI box exported from
+    # VirtualBox 7.1+ (NVRAM item, settings 1.19) that noble's 7.0 rejects.
+    # Pinned explicitly rather than ubuntu-latest, since this job also depends
+    # on the runner's release for the rmmod kvm_amd step, the HashiCorp apt
+    # suite from `lsb_release -cs` and distro Ansible.
+    runs-on: ubuntu-26.04
     name: vagrant-test (Ubuntu ${{ matrix.ubuntu }})
     strategy:
       fail-fast: false
