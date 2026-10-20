@@ -17,6 +17,7 @@ on:
       - "tests/vagrant/**"
       - "tests/verify-deployment.sh"
       - ".github/workflows/ansible-test.yml"
+  workflow_dispatch:
   schedule:
     - cron: "45 2 * * *"
 
