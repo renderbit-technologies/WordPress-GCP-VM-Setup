@@ -13,13 +13,13 @@ The stack includes: Nginx (official nginx.org repo), PHP 8.4 FPM (Ondrej Surý: 
 
 ### Glossary
 
-- **PHP**: the language WordPress runs on; **PHP-FPM** is its FastCGI Process Manager
-- **PPA**: Personal Package Archive, an Ubuntu third-party package repository
-- **VM**: virtual machine; **IP**: the server's public IP address
-- **WP**: WordPress
-- **MU-plugin**: a WordPress "must-use" plugin in `wp-content/mu-plugins/`, loaded on every request and not removable from the admin UI
-- **XSS**: cross-site scripting
-- **CONT**: the environment variable that answers "continue?" prompts in batch mode
+- Hypertext Preprocessor (PHP): the language WordPress runs on, served by PHP FastCGI Process Manager (PHP-FPM)
+- Personal Package Archive (PPA): an Ubuntu third-party package repository
+- Virtual machine (VM); Internet Protocol (IP) address
+- WordPress (WP)
+- Must-use (MU) plugin: a WordPress plugin in `wp-content/mu-plugins/` that loads on each request and has no deactivate button in the admin UI
+- Cross-site scripting (XSS)
+- Continue (CONT): the environment variable that answers "continue?" prompts in batch mode
 
 ## Command Reference
 
@@ -238,7 +238,7 @@ When modifying shared functionality (e.g., WordPress hardening, Nginx config, PH
 
 **SSL/TLS**:
 
-- When `/etc/letsencrypt/live/$DOMAIN/fullchain.pem` exists, both paths render the HTTPS server block themselves instead of relying on certbot's one-time in-place edit.
+- When `/etc/letsencrypt/live/$DOMAIN/fullchain.pem` exists, the Bash script and the `wordpress` role write the HTTPS server block into the Nginx site config. Certbot's own one-time edit is not used.
 - Certbot only runs once; later runs skip it because the certificate exists. Rendering the HTTPS block ourselves stops re-runs from reverting the site to HTTP-only.
 
 - Production: Certbot with Let's Encrypt, auto-renewal via systemd timer
