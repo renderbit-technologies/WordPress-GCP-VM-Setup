@@ -24,6 +24,8 @@ exclude_paths:
   - vendor/**
   - node_modules/**
   - .git/**
+  # Vendored agent skills, pinned by hash in skills-lock.json; fix upstream, not here
+  - .agents/**
 
 analysis:
   languages:
