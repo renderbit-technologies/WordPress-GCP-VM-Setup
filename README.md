@@ -14,6 +14,7 @@ Automated, production-ready scripts and Ansible playbooks to deploy a high-perfo
 | **TLS**          | Certbot / Let's Encrypt with auto-renewal                                      |
 | **Security**     | Fail2Ban (SSH jail), Unattended Upgrades, security headers, XML-RPC mitigation |
 | **Swap**         | Configurable swap file for low-memory VMs                                      |
+| **Monitoring**   | Google Cloud Ops Agent on GCP VMs — log collection only; agent metrics off to stay within the Cloud Monitoring free tier |
 | **Auto-updates** | Weekly WP core/plugin/theme update cron + OS unattended-upgrades; WP-Cron events run via a 5-min system cron (page-load spawning disabled) |
 
 ## Prerequisites
@@ -57,6 +58,7 @@ Set environment variables before running the script to skip prompts:
 | `ENABLE_FAIL2BAN` | Enable Fail2Ban (`y`/`n`)                      | `y`               |
 | `CONT`            | Skip confirmation prompt (`y`/`n`)             | `y` in batch mode |
 | `SWAP_SIZE`       | Swap file size (used by `setup-swap.sh`)       | `2G`              |
+| `ENABLE_OPS_AGENT` | Install the Ops Agent, metrics off (`auto`/`y`/`n`; `auto` = GCP VMs only) | `auto` |
 
 Example:
 
@@ -69,7 +71,7 @@ sudo bash install.sh
 
 An Ansible-based deployment is also available in [`ansible/`](ansible/), offering **idempotent, repeatable** provisioning with the same functionality as the shell scripts.
 
-Roles: `common` → `swap` → `wordpress` → `security`
+Roles: `common` → `swap` → `wordpress` → `security` → `ops_agent`
 
 See the dedicated [Ansible README](ansible/README.md) for full usage, variables, Vagrant testing, and requirements.
 
@@ -152,12 +154,17 @@ wp plugin deactivate sucuri-scanner && wp plugin delete sucuri-scanner
 - **Certbot** — Automatic HTTPS with Let's Encrypt and systemd renewal timer
 - **MariaDB** — Anonymous users removed, test database dropped, root password set
 
+### Monitoring
+
+- **Google Cloud Ops Agent** — installed on GCP VMs (detected via the metadata server) for log collection. Its metrics pipeline is turned off: Ops Agent metrics are billed per MiB beyond the billing account's 150 MiB/month free tier (~120 MiB/month per VM with defaults). Compute Engine's own VM metrics (CPU, disk and network I/O) stay available in Cloud Monitoring for free. Set `ENABLE_OPS_AGENT=n` / `enable_ops_agent: false` to skip it.
+
 ## Repository Structure
 
 ```text
 .
 ├── install.sh                  # Entrypoint — downloads and runs the setup scripts
 ├── setup-swap.sh               # Swap file creation and sysctl tuning
+├── setup-ops-agent.sh          # Google Cloud Ops Agent (logging only, metrics off)
 ├── setup-wp-nginx.sh           # Full WordPress + Nginx + MariaDB + phpMyAdmin setup
 ├── ansible/                    # Ansible playbook (alternative to shell scripts)
 │   ├── playbook.yml            # Main playbook with vars_prompt for credentials
@@ -168,7 +175,8 @@ wp plugin deactivate sucuri-scanner && wp plugin delete sucuri-scanner
 │       ├── common/             # System packages and apt cache update
 │       ├── swap/               # Swap file management
 │       ├── wordpress/          # Nginx, PHP, MariaDB, WP-CLI, WordPress, phpMyAdmin
-│       └── security/           # Fail2Ban, Unattended Upgrades, file permissions
+│       ├── security/           # Fail2Ban, Unattended Upgrades, file permissions
+│       └── ops_agent/          # Google Cloud Ops Agent (logging only, metrics off)
 ├── tests/
 │   ├── bash/                   # Vagrant-based test harness for shell scripts
 │   │   ├── Vagrantfile         # Test VM with env-var driven provisioning

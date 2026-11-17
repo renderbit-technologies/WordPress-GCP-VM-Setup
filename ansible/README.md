@@ -1,10 +1,10 @@
 # WordPress Ansible Playbook
 
-An Ansible playbook that provisions a complete, production-ready WordPress stack — functionally equivalent to the `setup-swap.sh` and `setup-wp-nginx.sh` bash scripts, with the added benefits of idempotency and repeatability.
+An Ansible playbook that provisions a complete, production-ready WordPress stack — functionally equivalent to the `setup-swap.sh`, `setup-wp-nginx.sh` and `setup-ops-agent.sh` bash scripts, with the added benefits of idempotency and repeatability.
 
 ## What It Does
 
-The playbook executes four roles in sequence:
+The playbook executes five roles in sequence:
 
 ### 1. `common` — System Packages
 
@@ -170,6 +170,12 @@ Already-provisioned boxes can adopt this without a full reprovision — just re-
   - Files: `0664`
   - `wp-config.php`: `0640` (owned by `www-data`)
 
+### 5. `ops_agent` — Google Cloud Ops Agent
+
+- Runs only on GCP VMs when `enable_ops_agent: auto` (default), detected via the Compute Engine metadata server; `true`/`false` forces it on or off.
+- Installs the Google Cloud Ops Agent from Google's repository if missing. An install failure is reported and skipped, not fatal.
+- Writes `/etc/google-cloud-ops-agent/config.yaml` with logging at the agent defaults and the metrics pipeline disabled (`receivers: []`), so Ops Agent metrics don't consume the billing account's Cloud Monitoring free tier. Restarts the agent only when the config changes.
+
 ## Playbook Variables
 
 Variables are defined in `playbook.yml` and can be overridden via inventory, command-line (`--extra-vars`), or `vars_prompt`.
@@ -197,6 +203,7 @@ The playbook prompts for these at runtime. Press Enter to auto-generate a secure
 | `enable_fail2ban` | Install and enable Fail2Ban                 | `true`           |
 | `enable_ssl`      | Obtain SSL certificate via Certbot          | `true`           |
 | `swap_size`       | Swap file size                              | `2G`             |
+| `enable_ops_agent` | Ops Agent, logging only (`auto` = GCP VMs only, or `true`/`false`) | `auto` |
 
 ### Auto-Generated Variables (`pre_tasks`)
 
@@ -333,6 +340,11 @@ ansible/
         ├── handlers/main.yml                       # Fail2Ban service restart
         └── templates/
             └── 50unattended-upgrades.j2            # Unattended Upgrades configuration
+    └── ops_agent/
+        ├── tasks/main.yml                          # GCP detection, Ops Agent install, config
+        ├── handlers/main.yml                       # Ops Agent restart
+        └── templates/
+            └── ops-agent-config.yaml.j2            # Logging on, metrics off
 ```
 
 ## Benefits Over Bash Scripts

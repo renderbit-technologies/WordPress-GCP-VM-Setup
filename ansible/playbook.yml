@@ -30,6 +30,9 @@
     enable_fail2ban: true
     enable_ssl: true
     swap_size: "2G"
+    # Google Cloud Ops Agent (logging only, metrics off): auto installs it
+    # only on GCP VMs; true/false forces it on or off.
+    enable_ops_agent: "auto"
 
   pre_tasks:
     - name: Fail fast on an unsupported OS release
@@ -158,3 +161,4 @@
     - swap
     - wordpress
     - security
+    - ops_agent
