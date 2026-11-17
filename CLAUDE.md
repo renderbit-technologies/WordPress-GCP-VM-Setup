@@ -98,14 +98,14 @@ The repository maintains **two parallel implementations** that must stay aligned
 
 **Bash scripts** (root-level):
 
-- Entry: `install.sh` → orchestrates `setup-swap.sh` + `setup-wp-nginx.sh`
+- Entry: `install.sh` → orchestrates `setup-swap.sh` + `setup-wp-nginx.sh` + `setup-ops-agent.sh`
 - Direct system commands, environment variable configuration
 - Interactive prompts *or* environment variables for non-interactive mode
 - Credentials stored in `/root/.wp-credentials` (mode `0600`)
 
 **Ansible playbook** (`ansible/`):
 
-- Entry: `playbook.yml` → roles: `common` → `swap` → `wordpress` → `security`
+- Entry: `playbook.yml` → roles: `common` → `swap` → `wordpress` → `security` → `ops_agent`
 - Idempotent, declarative tasks with Jinja2 templates
 - `vars_prompt` for credentials (auto-generates secure passwords)
 - Same credential file format as Bash path
@@ -141,6 +141,12 @@ When modifying shared functionality (e.g., WordPress hardening, Nginx config, PH
 - File permissions: directories `0775`, files `0664`, `wp-config.php` `0640`
 - WordPress: MU-plugin disables XML-RPC pingback, security constants in `wp-config.php`
 
+**Google Cloud Ops Agent** (`setup-ops-agent.sh` or `ops_agent` role):
+
+- Only on GCP VMs by default (`ENABLE_OPS_AGENT`/`enable_ops_agent` = `auto`, detected via the GCE metadata server)
+- Logging at agent defaults; metrics pipeline disabled (`receivers: []`) because Ops Agent metrics are billed per MiB beyond the billing account's 150 MiB/month free tier
+- An agent install failure warns and continues; it never fails the WordPress deployment
+
 ### Template & Configuration Files
 
 **Ansible templates** (`ansible/roles/*/templates/`):
@@ -152,6 +158,7 @@ When modifying shared functionality (e.g., WordPress hardening, Nginx config, PH
 - `wp-credentials.j2`: Credential file template (matches Bash format)
 - `wp-updates.sh.j2`: Weekly cron script for WP updates
 - `50unattended-upgrades.j2`: Unattended upgrades config
+- `ops-agent-config.yaml.j2`: Ops Agent config (logging on, metrics off; matches the heredoc in `setup-ops-agent.sh`)
 
 **Files referenced by both paths**:
 
@@ -201,6 +208,7 @@ When modifying shared functionality (e.g., WordPress hardening, Nginx config, PH
 - `ENABLE_FAIL2BAN`: `y/n` (default: `y`)
 - `SKIP_CERTBOT`: `y` to skip SSL for CI/tests (default: `n`)
 - `SWAP_SIZE`: Swap file size (default: `2G`)
+- `ENABLE_OPS_AGENT`: `auto/y/n` Ops Agent with metrics off (default: `auto`, GCP VMs only)
 - `CONT`: `y` to skip confirmation prompts in batch mode
 
 ## Environment-Specific Behavior
