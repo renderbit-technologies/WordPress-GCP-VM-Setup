@@ -172,7 +172,7 @@ Already-provisioned boxes can adopt this without a full reprovision — just re-
 
 ### 5. `ops_agent` — Google Cloud Ops Agent
 
-- Runs only on GCP VMs when `enable_ops_agent: auto` (default), detected via the GCE metadata server; `true`/`false` forces it on or off.
+- Runs only on GCP VMs when `enable_ops_agent: auto` (default), detected via the Compute Engine metadata server; `true`/`false` forces it on or off.
 - Installs the Google Cloud Ops Agent from Google's repository if missing. An install failure is reported and skipped, not fatal.
 - Writes `/etc/google-cloud-ops-agent/config.yaml` with logging at the agent defaults and the metrics pipeline disabled (`receivers: []`), so Ops Agent metrics don't consume the billing account's Cloud Monitoring free tier. Restarts the agent only when the config changes.
 

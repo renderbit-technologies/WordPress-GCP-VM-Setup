@@ -10,7 +10,7 @@ set -euo pipefail
 # Supported targets: Ubuntu 24.04 LTS (noble) and Ubuntu 26.04 LTS (resolute)
 #
 # Supported Environment Variables:
-#   ENABLE_OPS_AGENT  (Optional) auto/y/n. "auto" installs only when the GCE
+#   ENABLE_OPS_AGENT  (Optional) auto/y/n. "auto" installs only when the Compute Engine
 #                     metadata server answers, i.e. on a GCP VM. [default: auto]
 
 # -------------------------
@@ -82,7 +82,9 @@ esac
 
 # 1. Install the agent. A failure here should not fail the whole WordPress
 #    install, so it is reported and the script stops without an error.
-if dpkg -s google-cloud-ops-agent >/dev/null 2>&1; then
+# dpkg -s also succeeds for a removed-but-not-purged package ("deinstall ok
+# config-files"), so check the actual installed state.
+if [ "$(dpkg-query -W -f='${db:Status-Status}' google-cloud-ops-agent 2>/dev/null)" = "installed" ]; then
 	log_info "Ops Agent is already installed."
 else
 	log_info "Installing Ops Agent from Google's package repository..."
@@ -127,5 +129,6 @@ else
 	log_success "Ops Agent config updated and agent restarted."
 fi
 
-systemctl enable google-cloud-ops-agent >/dev/null 2>&1 || true
+# Start the agent even when the config was unchanged (it may have been stopped).
+systemctl enable --now google-cloud-ops-agent >/dev/null
 log_success "Ops Agent setup complete (logging on, metrics off)."

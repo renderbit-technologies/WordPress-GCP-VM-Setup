@@ -4,7 +4,7 @@
 # beyond the billing account's 150 MiB/month free tier; Compute Engine's own
 # VM metrics stay available for free.
 
-- name: Check for the GCE metadata server
+- name: Check for the Compute Engine metadata server
   ansible.builtin.uri:
     url: http://metadata.google.internal/computeMetadata/v1/instance/id
     headers:
@@ -26,14 +26,16 @@
 - name: Manage the Ops Agent
   when: ops_agent_enabled | bool
   block:
+    # dpkg -s also succeeds for a removed-but-not-purged package, so check
+    # the actual installed state.
     - name: Check whether the Ops Agent is installed
-      ansible.builtin.command: dpkg -s google-cloud-ops-agent
+      ansible.builtin.command: dpkg-query -W -f=${db:Status-Status} google-cloud-ops-agent
       register: ops_agent_pkg
       changed_when: false
       failed_when: false
 
     - name: Install the Ops Agent
-      when: ops_agent_pkg.rc != 0
+      when: ops_agent_pkg.stdout != 'installed'
       block:
         - name: Download the Ops Agent repository script
           ansible.builtin.get_url:

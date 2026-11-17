@@ -143,9 +143,9 @@ When modifying shared functionality (e.g., WordPress hardening, Nginx config, PH
 
 **Google Cloud Ops Agent** (`setup-ops-agent.sh` or `ops_agent` role):
 
-- Only on GCP VMs by default (`ENABLE_OPS_AGENT`/`enable_ops_agent` = `auto`, detected via the GCE metadata server)
+- Only on GCP VMs by default (`ENABLE_OPS_AGENT`/`enable_ops_agent` = `auto`, detected via the Compute Engine metadata server)
 - Logging at agent defaults; metrics pipeline disabled (`receivers: []`) because Ops Agent metrics are billed per MiB beyond the billing account's 150 MiB/month free tier
-- An agent install failure warns and continues; it never fails the WordPress deployment
+- If the agent install fails, a warning is logged and the WordPress deployment continues; check `systemctl status google-cloud-ops-agent` when the agent is required
 
 ### Template & Configuration Files
 
