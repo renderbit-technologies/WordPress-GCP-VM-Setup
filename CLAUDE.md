@@ -9,7 +9,7 @@ This repository maintains two deployment paths for a production-ready WordPress 
 - **Bash scripts**: Root-level scripts for interactive or CI deployment
 - **Ansible playbook**: Idempotent, repeatable provisioning in `ansible/`
 
-The stack includes: Nginx (official nginx.org repo), PHP 8.4 FPM (Ondrej Surý: `ppa:ondrej/php` on 24.04, `packages.sury.org/php` on 26.04), MariaDB, WordPress (latest), phpMyAdmin, Certbot (Let's Encrypt), Fail2Ban, and unattended upgrades.
+The stack includes: Nginx (official nginx.org repo), Hypertext Preprocessor (PHP) 8.4 FPM (Ondrej Surý: `ppa:ondrej/php` on 24.04, `packages.sury.org/php` on 26.04), MariaDB, WordPress (latest), phpMyAdmin, Certbot (Let's Encrypt), Fail2Ban, and unattended upgrades.
 
 ### Glossary
 
@@ -19,6 +19,7 @@ The stack includes: Nginx (official nginx.org repo), PHP 8.4 FPM (Ondrej Surý: 
 - WordPress (WP)
 - Must-use (MU) plugin: a WordPress plugin in `wp-content/mu-plugins/` that loads on each request and has no deactivate button in the admin UI
 - Cross-site scripting (XSS)
+- Remote Procedure Call (RPC); XML-RPC is WordPress's XML-based RPC endpoint, `xmlrpc.php`
 - Continue (CONT): the environment variable that answers "continue?" prompts in batch mode
 
 ## Command Reference
@@ -259,10 +260,10 @@ Both Bash and Ansible paths implement identical hardening:
 
 The Nginx server block (identical in both paths) applies to every request and includes:
 
-- Security headers: `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `X-XSS-Protection`, `Content-Security-Policy`
+- On every response, Nginx sends security headers: `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `X-XSS-Protection`, `Content-Security-Policy`
 - Blocked paths: `wp-config.php`, `xmlrpc.php`, `readme.html`, `license.txt`, `install.php`, hidden files
 - PHP execution denied in `uploads/` and `files/`
-- Static asset caching with `expires max`
+- When serving static assets (images, CSS, JS, fonts), Nginx sets `expires max` so browsers cache them
 - phpMyAdmin at `/phpmyadmin`
 
 ### PHP-FPM Pool Sizing Formula
@@ -281,6 +282,17 @@ box doesn't get sized as if it had all its CPU cores' worth of workers:
 - `pm.max_requests = 500`
 
 This formula ensures optimal resource utilization based on available CPU and RAM.
+
+## Boundaries
+
+Do not:
+
+- Commit real secrets: passwords, tokens, or the contents of `/root/.wp-credentials`
+- Use the test-only credentials above in production
+- Change shared behavior in one deployment path only, unless the task is scoped to that path
+- Regenerate credentials when `/root/.wp-credentials` already exists
+- Add support for Ubuntu releases other than 24.04 and 26.04 without updating both paths and the tests
+- Edit vendored skills under `.agents/`; they are pinned by hash in `skills-lock.json`
 
 ## References
 
