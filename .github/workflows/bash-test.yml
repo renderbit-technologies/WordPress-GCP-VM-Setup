@@ -35,11 +35,20 @@ jobs:
     # on the runner's release for the rmmod kvm_amd step, the HashiCorp apt
     # suite from `lsb_release -cs`.
     runs-on: ubuntu-26.04
-    name: vagrant-test (Ubuntu ${{ matrix.ubuntu }})
+    name: vagrant-test (Ubuntu ${{ matrix.ubuntu }}${{ matrix.upgrade && ', upgrade from main' || '' }})
     strategy:
       fail-fast: false
       matrix:
         ubuntu: ["24.04", "26.04"]
+        # Upgrade test: install from main, then re-run the code under test on
+        # the same VM, as an existing site would. Covers moving 24.04 sites
+        # off ppa:ondrej/php (#46) while main still installs from it. Listed
+        # as a dimension so the include below adds a job instead of merging
+        # into the plain 24.04 one.
+        upgrade: [false]
+        include:
+          - ubuntu: "24.04"
+            upgrade: true
     # Job-level so `vagrant up`, `vagrant provision` and `vagrant ssh` all
     # evaluate the Vagrantfile against the same box.
     env:
@@ -50,6 +59,15 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
+        with:
+          # The upgrade test switches between main and the code under test.
+          fetch-depth: ${{ matrix.upgrade && '0' || '1' }}
+
+      - name: Check out main for the initial install
+        if: matrix.upgrade
+        run: |
+          echo "TEST_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          git checkout --detach origin/main
 
       - name: Cache Vagrant boxes
         uses: actions/cache@v6
@@ -115,6 +133,10 @@ jobs:
           bash .github/scripts/run-vagrant-up-with-retry.sh tests/bash
 
       - name: Verify deployment (internal)
+        # The upgrade test verifies after re-provisioning instead: this
+        # checkout's verify script expects the state the code under test
+        # leaves, not main's (main's own provisioner verify already ran).
+        if: ${{ !matrix.upgrade }}
         timeout-minutes: 5
         run: |
           cd tests/bash
@@ -122,7 +144,14 @@ jobs:
           # re-run it here too as a from-outside-the-provisioner sanity check.
           vagrant ssh -c 'cd /vagrant && sudo env DOMAIN=vagrant.local WP_DB=wp_test WP_DB_USER=wp_user WP_DB_PASS=secure_wp_password bash tests/verify-deployment.sh'
 
-      - name: Idempotency check
+      - name: Switch to the code under test
+        if: matrix.upgrade
+        # The synced folder is live, so the next provision runs this code.
+        # Provisioning chmods scripts in the checkout (tests/bash/Vagrantfile
+        # runs chmod +x), so ignore mode-only changes, but not content ones.
+        run: git -c core.fileMode=false checkout --detach "$TEST_SHA"
+
+      - name: ${{ matrix.upgrade && 'Upgrade check' || 'Idempotency check' }}
         timeout-minutes: 15
         run: |
           cd tests/bash

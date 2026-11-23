@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # setup-wp-nginx.sh
-# Installs nginx (official nginx.org repo) + PHP 8.4 (Ondrej Surý's packages) + MariaDB + WordPress + phpMyAdmin with hardening
+# Installs nginx (official nginx.org repo) + PHP 8.4 (Ondřej Surý's packages.sury.org repo) + MariaDB + WordPress + phpMyAdmin with hardening
 # Supported targets: Ubuntu 24.04 LTS (noble) and Ubuntu 26.04 LTS (resolute)
 #
 # Supported Environment Variables:
@@ -208,22 +208,53 @@ log_info "Updating system packages and repositories..."
 apt-get update -y
 apt-get install -y software-properties-common ca-certificates lsb-release apt-transport-https curl gnupg2 wget htop rsync zip unzip python3 cron
 
-# ppa:ondrej/php is not published for resolute; Ondrej ships PHP for 26.04
-# from packages.sury.org instead. Noble stays on the PPA so existing 24.04
-# sites keep the package source they were installed from.
-if [ "$OS_CODENAME" = "noble" ]; then
-	log_info "Adding Ondrej PHP PPA for PHP 8.4..."
-	add-apt-repository -y ppa:ondrej/php
+# PHP 8.4 comes from packages.sury.org on every supported release.
+# ppa:ondrej/php is frozen; sites installed from it (24.04, before #46) are
+# migrated the way the PPA's Launchpad page describes: install
+# debsuryorg-repository-php (served by the PPA; it writes php.sources),
+# then remove the PPA. Nothing is removed or downgraded: installed PHP
+# packages stay as they are and take their next update from sury.org.
+SURY_KEYRING=/usr/share/keyrings/debsuryorg-archive-keyring.gpg
+PHP_SOURCES=/etc/apt/sources.list.d/php.sources
+PHP_LIST=/etc/apt/sources.list.d/php.list
+PPA_PATTERN='ppa\.launchpad(content)?\.net/ondrej/php'
+PPA_KEY_FPR=B8DC7E53946656EFBCE4C1DD71DAEAAB4AD4CAB6
+
+if grep -qsE "$PPA_PATTERN" /etc/apt/sources.list /etc/apt/sources.list.d/*; then
+	log_info "Migrating PHP from ppa:ondrej/php to packages.sury.org..."
+	apt-get install -y debsuryorg-repository-php
+	add-apt-repository -y --remove ppa:ondrej/php
+	# Leftovers add-apt-repository doesn't own: the .list file and key
+	# that Ansible's apt_repository wrote for the PPA (the key goes to
+	# /etc/apt/trusted.gpg through apt-key, or to a keyring file).
+	{ grep -lsE "$PPA_PATTERN" /etc/apt/sources.list.d/* || true; } | xargs -r rm -f
+	rm -f /etc/apt/trusted.gpg.d/*-ondrej-php.gpg /etc/apt/keyrings/*-ondrej-php.gpg
+	if command -v apt-key >/dev/null 2>&1 && [ -s /etc/apt/trusted.gpg ]; then
+		apt-key --keyring /etc/apt/trusted.gpg del "$PPA_KEY_FPR" >/dev/null 2>&1 || true
+	fi
+fi
+
+# New installs follow https://packages.sury.org/php/README.txt. The keyring
+# package is published in the repository, so later key extensions arrive
+# as normal package updates.
+if ! dpkg-query -W -f='${Status}' debsuryorg-archive-keyring 2>/dev/null | grep -q 'ok installed'; then
+	log_info "Installing the packages.sury.org archive keyring..."
+	SURY_KEYRING_DEB="$(mktemp --suffix=.deb)"
+	curl -fsSL https://packages.sury.org/debsuryorg-archive-keyring.deb -o "$SURY_KEYRING_DEB"
+	dpkg -i "$SURY_KEYRING_DEB"
+	rm -f "$SURY_KEYRING_DEB"
+fi
+
+if [ -e "$PHP_SOURCES" ]; then
+	# Already enabled by debsuryorg-repository-php. A second entry for the
+	# same repository with a different signed-by makes apt refuse to run.
+	if grep -qs 'packages\.sury\.org/php' "$PHP_LIST"; then
+		rm -f "$PHP_LIST"
+	fi
 else
 	log_info "Adding packages.sury.org PHP repository for PHP 8.4..."
-	# Re-fetched on every run: the signing key carries an expiry that
-	# upstream extends, and nothing else (no keyring package in the repo)
-	# would pick up the extended key.
-	curl -fsSL https://packages.sury.org/php/apt.gpg \
-		-o /usr/share/keyrings/deb.sury.org-php.gpg
-	echo "deb [signed-by=/usr/share/keyrings/deb.sury.org-php.gpg] \
-https://packages.sury.org/php/ $OS_CODENAME main" \
-		>/etc/apt/sources.list.d/php.list
+	echo "deb [signed-by=$SURY_KEYRING] https://packages.sury.org/php/ $OS_CODENAME main" \
+		>"$PHP_LIST"
 fi
 
 log_info "Adding official Nginx repository..."

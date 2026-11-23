@@ -29,7 +29,8 @@ This is the main role and handles everything from packages to a working WordPres
 
 #### Package Installation
 
-- Adds Ondrej Surý's PHP repository (`ppa:ondrej/php` on 24.04, `packages.sury.org/php` on 26.04, where the PPA is not published) and the official nginx.org repository for Nginx.
+- Adds Ondřej Surý's PHP repository, [packages.sury.org/php](https://packages.sury.org/php/), following its `README.txt` (`debsuryorg-archive-keyring` plus `/etc/apt/sources.list.d/php.list`), and the official nginx.org repository for Nginx.
+- Migrates 24.04 servers first provisioned from the now-frozen `ppa:ondrej/php`: installs `debsuryorg-repository-php` (which writes `php.sources`), then removes the PPA source and its key. Installed PHP packages are not removed or downgraded; they take their next update from packages.sury.org. See `roles/wordpress/tasks/php-repository.yml`.
 - Installs Nginx, MariaDB, PHP 8.4 (FPM, CLI, and extensions: mysql, xml, curl, mbstring, zip, gd, intl, opcache, imagick), Certbot with Nginx plugin.
 
 #### PHP-FPM Tuning
@@ -325,6 +326,7 @@ ansible/
     │   └── tasks/main.yml                          # Swap file creation, sysctl tuning
     ├── wordpress/
     │   ├── tasks/main.yml                          # Full stack: PHP, Nginx, MariaDB, WP, phpMyAdmin
+    │   ├── tasks/php-repository.yml                # packages.sury.org setup + ppa:ondrej/php migration
     │   ├── handlers/main.yml                       # Service restarts (Nginx, PHP-FPM, MariaDB)
     │   ├── files/
     │   │   └── disable-xmlrpc-pingback.php         # MU-plugin for XML-RPC DDoS mitigation

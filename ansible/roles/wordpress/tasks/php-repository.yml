@@ -1,0 +1,101 @@
+---
+# PHP 8.4 comes from packages.sury.org on every supported release.
+# ppa:ondrej/php is frozen; sites installed from it (24.04, before #46) are
+# migrated the way the PPA's Launchpad page describes: install
+# debsuryorg-repository-php (served by the PPA; it writes php.sources),
+# then remove the PPA. Nothing is removed or downgraded: installed PHP
+# packages stay as they are and take their next update from sury.org.
+# Mirrors the PHP repository step in setup-wp-nginx.sh.
+
+- name: Find ppa:ondrej/php APT sources
+  ansible.builtin.find:
+    paths: /etc/apt/sources.list.d
+    # Matched per line with re.match, hence the leading ".*".
+    contains: '.*ppa\.launchpad(content)?\.net/ondrej/php'
+  register: php_ppa_sources
+
+- name: Migrate from ppa:ondrej/php to packages.sury.org
+  when: php_ppa_sources.matched > 0
+  block:
+    - name: Install debsuryorg-repository-php (enables packages.sury.org)
+      ansible.builtin.apt:
+        name: debsuryorg-repository-php
+        state: present
+        update_cache: true
+
+    - name: Remove ppa:ondrej/php sources
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ php_ppa_sources.files }}"
+      loop_control:
+        label: "{{ item.path }}"
+
+    - name: Find ppa:ondrej/php keyring files
+      ansible.builtin.find:
+        paths:
+          - /etc/apt/trusted.gpg.d
+          - /etc/apt/keyrings
+        patterns: '*-ondrej-php.gpg'
+      register: php_ppa_keyrings
+
+    - name: Remove ppa:ondrej/php keyring files
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ php_ppa_keyrings.files }}"
+      loop_control:
+        label: "{{ item.path }}"
+
+    # apt_repository stores a PPA's key in /etc/apt/trusted.gpg through
+    # apt-key when apt-key exists, as it does on 24.04.
+    - name: Remove ppa:ondrej/php key from /etc/apt/trusted.gpg
+      ansible.builtin.command:
+        cmd: apt-key --keyring /etc/apt/trusted.gpg del B8DC7E53946656EFBCE4C1DD71DAEAAB4AD4CAB6
+        removes: /etc/apt/trusted.gpg
+      changed_when: false
+      failed_when: false
+
+# New installs follow https://packages.sury.org/php/README.txt. The keyring
+# package is published in the repository, so later key extensions arrive
+# as normal package updates.
+- name: Check for the packages.sury.org archive keyring package
+  ansible.builtin.command:
+    cmd: dpkg-query -W -f=${Status} debsuryorg-archive-keyring
+  register: php_sury_keyring
+  changed_when: false
+  failed_when: false
+
+# Only when missing: once installed, apt keeps it current from the
+# repository, and re-installing the .deb could downgrade it.
+- name: Install packages.sury.org archive keyring
+  ansible.builtin.apt:
+    deb: https://packages.sury.org/debsuryorg-archive-keyring.deb
+  when: "'ok installed' not in php_sury_keyring.stdout"
+
+- name: Check for php.sources written by debsuryorg-repository-php
+  ansible.builtin.stat:
+    path: /etc/apt/sources.list.d/php.sources
+  register: php_sury_sources
+
+# Written by earlier versions of this role (26.04). A second entry for the
+# same repository with a different signed-by makes apt refuse to run. The
+# key file it names now belongs to debsuryorg-archive-keyring, so it stays.
+- name: Remove packages.sury.org entry signed by the old apt.gpg key
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/usr/share/keyrings/deb.sury.org-php.gpg] https://packages.sury.org/php/ {{ ansible_distribution_release }} main"
+    state: absent
+    filename: php
+    update_cache: false
+
+- name: Add packages.sury.org PHP repository
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/usr/share/keyrings/debsuryorg-archive-keyring.gpg] https://packages.sury.org/php/ {{ ansible_distribution_release }} main"
+    state: "{{ 'absent' if php_sury_sources.stat.exists else 'present' }}"
+    filename: php
+    update_cache: false
+
+- name: Refresh APT cache for packages.sury.org
+  ansible.builtin.apt:
+    update_cache: true
+  changed_when: false
