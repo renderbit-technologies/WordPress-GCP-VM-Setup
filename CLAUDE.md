@@ -70,8 +70,14 @@ cd ansible && vagrant destroy -f
 - `shellcheck.yml`: Lints all `.sh` files on push/PR
 - `bash-test.yml`: Vagrant-based integration test for shell scripts
 - `ansible-test.yml`: Vagrant-based integration test for Ansible playbook
-- Both Vagrant workflows also run a 24.04 "upgrade from main" job. It provisions from `main`, checks out the code under test, provisions again, then runs `tests/verify-deployment.sh`
 - `codacy.yml`: Security scanning with Trivy
+
+Both Vagrant workflows also run a 24.04 "upgrade from main" job, which tests re-running the code under test over a site installed from `main`:
+
+1. Provision the VM from `main`
+2. Check out the code under test
+3. Provision again
+4. Run `tests/verify-deployment.sh`
 
 ### Deployment
 
