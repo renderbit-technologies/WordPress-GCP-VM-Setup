@@ -9,7 +9,7 @@ This repository maintains two deployment paths for a production-ready WordPress 
 - **Bash scripts**: Root-level scripts for interactive or CI deployment
 - **Ansible playbook**: Idempotent, repeatable provisioning in `ansible/`
 
-The stack includes: Nginx (official nginx.org repo), PHP 8.4 FPM (Ondrej Surý: `ppa:ondrej/php` on 24.04, `packages.sury.org/php` on 26.04), MariaDB, WordPress (latest), phpMyAdmin, Certbot (Let's Encrypt), Fail2Ban, and unattended upgrades.
+The stack includes: Nginx (official nginx.org repo), PHP 8.4 FPM (Ondřej Surý's `packages.sury.org/php`), MariaDB, WordPress (latest), phpMyAdmin, Certbot (Let's Encrypt), Fail2Ban, and unattended upgrades.
 
 ## Command Reference
 
@@ -59,6 +59,7 @@ cd ansible && vagrant destroy -f
 - `shellcheck.yml`: Lints all `.sh` files on push/PR
 - `bash-test.yml`: Vagrant-based integration test for shell scripts
 - `ansible-test.yml`: Vagrant-based integration test for Ansible playbook
+- Both Vagrant workflows also run a 24.04 "upgrade from main" job: provision from `main`, check out the code under test, re-provision, then run `tests/verify-deployment.sh`
 - `codacy.yml`: Security scanning with Trivy
 
 ### Deployment
@@ -123,7 +124,7 @@ When modifying shared functionality (e.g., WordPress hardening, Nginx config, PH
 
 **WordPress Stack** (`setup-wp-nginx.sh` or `wordpress` role):
 
-1. **Packages**: official nginx.org repo → Nginx; Ondrej Surý's repo (PPA on 24.04, packages.sury.org on 26.04) → PHP 8.4 FPM + extensions; MariaDB from the distro repo
+1. **Packages**: official nginx.org repo → Nginx; packages.sury.org (Ondřej Surý) → PHP 8.4 FPM + extensions; MariaDB from the distro repo
 2. **PHP-FPM Tuning**: Dynamic pool sizing based on CPU cores and available RAM (`pm.max_children = cores × 5`, capped so the box's RAM isn't oversubscribed)
 3. **OPcache**: 256MB memory, 10K accelerated files
 4. **MariaDB**: Creates WP database/user, removes anonymous users, sets root password
@@ -210,6 +211,13 @@ When modifying shared functionality (e.g., WordPress hardening, Nginx config, PH
 - Production: Requires valid domain with DNS A record pointing to VM IP. Certbot will fail otherwise.
 - Vagrant: Uses `192.168.56.10.nip.io` or maps to `/etc/hosts`
 - CI/Hosted-runner: Maps domain to `127.0.0.1`, sets `SKIP_CERTBOT=y`
+
+**PHP Repository**:
+
+- Both paths install PHP only from `packages.sury.org/php`, set up as its `README.txt` says (`debsuryorg-archive-keyring` + `php.list`). `ppa:ondrej/php` is frozen
+- Sites first installed from the PPA (24.04, before #46) are migrated on re-run as the PPA's Launchpad page says: install `debsuryorg-repository-php` (writes `php.sources`), then remove the PPA source and key. When `php.sources` exists, `php.list` is not written (two entries with different `signed-by` make apt fail)
+- `/usr/share/keyrings/deb.sury.org-php.gpg` is owned by `debsuryorg-archive-keyring`; don't delete it
+- `tests/verify-deployment.sh` fails if the PPA is still configured or packages.sury.org is configured in more than one file
 
 **Credential Reuse**:
 

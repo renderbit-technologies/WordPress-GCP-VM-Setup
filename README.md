@@ -7,7 +7,7 @@ Automated, production-ready scripts and Ansible playbooks to deploy a high-perfo
 | Component        | Details                                                                        |
 | ---------------- | ------------------------------------------------------------------------------ |
 | **Web server**   | Nginx (official nginx.org repo)                                                |
-| **PHP**          | 8.4 FPM (Ondrej Surý's packages) — pool sizing tuned to CPU cores and RAM, OPcache enabled |
+| **PHP**          | 8.4 FPM (Ondřej Surý's [packages.sury.org](https://packages.sury.org/php/) repo) — pool sizing tuned to CPU cores and RAM, OPcache enabled |
 | **Database**     | MariaDB with root hardening and dedicated WP user                              |
 | **CMS**          | WordPress (latest) installed via WP-CLI                                        |
 | **Database UI**  | phpMyAdmin (latest, auto-configured)                                           |
@@ -136,6 +136,20 @@ desired:
 wp plugin deactivate sucuri-scanner && wp plugin delete sucuri-scanner
 ```
 
+#### PHP repository: `ppa:ondrej/php` → `packages.sury.org`
+
+Ubuntu 24.04 servers provisioned before this change got PHP from
+`ppa:ondrej/php`, which Ondřej Surý has frozen in favour of
+[packages.sury.org/php](https://packages.sury.org/php/). Re-running either
+installer migrates them the way the
+[PPA page](https://launchpad.net/~ondrej/+archive/ubuntu/php) describes:
+it installs `debsuryorg-repository-php` (which adds
+`/etc/apt/sources.list.d/php.sources`) and then removes the PPA and its key.
+Nothing is removed or downgraded: the installed PHP packages stay as they
+are and take their next update from packages.sury.org. The Bash installer
+then upgrades them right away, the same as it does on every re-run;
+the Ansible playbook leaves them for your normal package updates.
+
 ### Nginx Configuration
 
 - Security headers snippet (`X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `X-XSS-Protection`, `Content-Security-Policy`)
@@ -193,8 +207,8 @@ wp plugin deactivate sucuri-scanner && wp plugin delete sucuri-scanner
 | ------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | **ShellCheck**            | Push / PR to `main`                                         | Lints all `.sh` files with [ShellCheck](https://www.shellcheck.net/)                                     |
 | **Codacy Security Scan**  | Push / PR to `main` + weekly schedule                       | Runs Trivy security analysis and uploads SARIF results                                                   |
-| **Bash Scripts Test**     | Push / PR to `main` (when `*.sh` or `tests/bash/**` change) | Provisions a Vagrant VM with the shell scripts, verifies deployment, and tests idempotency               |
-| **Ansible Playbook Test** | Push / PR to `main` (when `ansible/**` changes)             | Runs syntax check, provisions a Vagrant VM with the playbook, verifies deployment, and tests idempotency |
+| **Bash Scripts Test**     | Push / PR to `main` (when `*.sh` or `tests/bash/**` change) | Provisions a Vagrant VM with the shell scripts, verifies deployment, and tests idempotency; a 24.04 job also installs from `main` first and re-runs this code over it (upgrade test) |
+| **Ansible Playbook Test** | Push / PR to `main` (when `ansible/**` changes)             | Runs syntax check, provisions a Vagrant VM with the playbook, verifies deployment, and tests idempotency; a 24.04 job also installs from `main` first and re-runs this code over it (upgrade test) |
 
 ## Credentials
 

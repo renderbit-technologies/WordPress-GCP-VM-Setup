@@ -226,6 +226,34 @@ else
 	fail "/usr/sbin/php-fpm8.4 not found"
 fi
 
+# --- PHP package source ---
+# Both paths use packages.sury.org only. On sites first installed from the
+# (now frozen) ppa:ondrej/php, a re-run must have removed the PPA. The
+# installed PHP build can still be the PPA's until sury.org publishes a
+# newer one, so this checks the configured sources, not the build.
+APT_SOURCE_FILES=(/etc/apt/sources.list /etc/apt/sources.list.d/*)
+if grep -qsE 'ppa\.launchpad(content)?\.net/ondrej/php' "${APT_SOURCE_FILES[@]}"; then
+	fail "ppa:ondrej/php is still configured as an APT source"
+else
+	pass "ppa:ondrej/php is not configured"
+fi
+SURY_SOURCE_COUNT=$({ grep -lsE '^[^#]*https://packages\.sury\.org/php/?' "${APT_SOURCE_FILES[@]}" || true; } | wc -l)
+if [ "$SURY_SOURCE_COUNT" -eq 1 ]; then
+	pass "packages.sury.org PHP repository is configured once"
+else
+	fail "packages.sury.org PHP repository is configured in $SURY_SOURCE_COUNT APT source files (expected 1)"
+fi
+if dpkg-query -W -f='${Status}' debsuryorg-archive-keyring 2>/dev/null | grep -q 'ok installed'; then
+	pass "debsuryorg-archive-keyring is installed"
+else
+	fail "debsuryorg-archive-keyring is not installed"
+fi
+if systemctl is-active --quiet php8.4-fpm 2>/dev/null; then
+	pass "php8.4-fpm is running"
+else
+	fail "php8.4-fpm is not running"
+fi
+
 # --- Database access ---
 # WP_DB_PASS may be auto-generated (e.g. by the Ansible path) and unknown to
 # the caller; fall back to parsing it out of the credentials file.
