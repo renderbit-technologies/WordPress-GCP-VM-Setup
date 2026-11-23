@@ -147,7 +147,9 @@ jobs:
       - name: Switch to the code under test
         if: matrix.upgrade
         # The synced folder is live, so the next provision runs this code.
-        run: git checkout --detach "$TEST_SHA"
+        # Provisioning chmods scripts in the checkout (tests/bash/Vagrantfile
+        # runs chmod +x), so ignore mode-only changes, but not content ones.
+        run: git -c core.fileMode=false checkout --detach "$TEST_SHA"
 
       - name: ${{ matrix.upgrade && 'Upgrade check' || 'Idempotency check' }}
         timeout-minutes: 15
