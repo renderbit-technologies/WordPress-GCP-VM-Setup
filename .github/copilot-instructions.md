@@ -3,8 +3,8 @@
 ## Architecture
 
 - This repository maintains two deployment paths for the same Ubuntu 24.04 / 26.04 WordPress stack: root-level Bash scripts and the Ansible playbook under `ansible/`.
-- The Bash entrypoint is `install.sh`, which orchestrates `setup-swap.sh` and `setup-wp-nginx.sh`.
-- The Ansible playbook runs roles in a fixed sequence: `common` -> `swap` -> `wordpress` -> `security`.
+- The Bash entrypoint is `install.sh`, which orchestrates `setup-swap.sh`, `setup-wp-nginx.sh` and `setup-ops-agent.sh`.
+- The Ansible playbook runs roles in a fixed sequence: `common` -> `swap` -> `wordpress` -> `security` -> `ops_agent`.
 - When changing shared behavior, keep the Bash and Ansible implementations aligned unless the task is explicitly scoped to one path.
 
 ## Code Style

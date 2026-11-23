@@ -18,7 +18,7 @@ The deployed stack consists of:
 
 There are two primary ways to deploy the stack:
 
-### 1. Shell Scripts (`install.sh`, `setup-swap.sh`, `setup-wp-nginx.sh`)
+### 1. Shell Scripts (`install.sh`, `setup-swap.sh`, `setup-wp-nginx.sh`, `setup-ops-agent.sh`)
 
 The entry point is `install.sh`. It can be run interactively or non-interactively using environment variables.
 

@@ -24,7 +24,7 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-if [ -f "$SCRIPT_DIR/setup-swap.sh" ] && [ -f "$SCRIPT_DIR/setup-wp-nginx.sh" ]; then
+if [ -f "$SCRIPT_DIR/setup-swap.sh" ] && [ -f "$SCRIPT_DIR/setup-wp-nginx.sh" ] && [ -f "$SCRIPT_DIR/setup-ops-agent.sh" ]; then
 	# Running from a checkout next to the sub-scripts: use them as-is rather
 	# than overwriting local changes with whatever is on GitHub HEAD.
 	echo "-----------------------------------------------------"
@@ -32,6 +32,7 @@ if [ -f "$SCRIPT_DIR/setup-swap.sh" ] && [ -f "$SCRIPT_DIR/setup-wp-nginx.sh" ];
 	echo "-----------------------------------------------------"
 	SETUP_SWAP="$SCRIPT_DIR/setup-swap.sh"
 	SETUP_WP="$SCRIPT_DIR/setup-wp-nginx.sh"
+	SETUP_OPS_AGENT="$SCRIPT_DIR/setup-ops-agent.sh"
 else
 	# Base URL (without commit hash to ensure HEAD/latest version)
 	BASE_URL="https://raw.githubusercontent.com/renderbit-technologies/WordPress-GCP-VM-Setup/main"
@@ -47,21 +48,29 @@ else
 	# sub-scripts will work.
 	curl -fsSL "${BASE_URL}/setup-swap.sh" -o "$TMPDIR/setup-swap.sh"
 	curl -fsSL "${BASE_URL}/setup-wp-nginx.sh" -o "$TMPDIR/setup-wp-nginx.sh"
+	curl -fsSL "${BASE_URL}/setup-ops-agent.sh" -o "$TMPDIR/setup-ops-agent.sh"
 
 	SETUP_SWAP="$TMPDIR/setup-swap.sh"
 	SETUP_WP="$TMPDIR/setup-wp-nginx.sh"
+	SETUP_OPS_AGENT="$TMPDIR/setup-ops-agent.sh"
 fi
 
 echo "-----------------------------------------------------"
-echo "Step 1/2: Setting up Swap"
+echo "Step 1/3: Setting up Swap"
 echo "-----------------------------------------------------"
 bash "$SETUP_SWAP"
 
 echo
 echo "-----------------------------------------------------"
-echo "Step 2/2: Installing WordPress stack"
+echo "Step 2/3: Installing WordPress stack"
 echo "-----------------------------------------------------"
 bash "$SETUP_WP"
+
+echo
+echo "-----------------------------------------------------"
+echo "Step 3/3: Configuring Google Cloud Ops Agent (logging only)"
+echo "-----------------------------------------------------"
+bash "$SETUP_OPS_AGENT"
 
 echo
 echo "-----------------------------------------------------"

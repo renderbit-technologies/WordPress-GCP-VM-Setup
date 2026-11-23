@@ -4,12 +4,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This repository maintains two deployment paths for a production-ready WordPress stack on Ubuntu 24.04 LTS and Ubuntu 26.04 LTS (other releases fail fast):
+This repository maintains two deployment paths for a production-ready WordPress stack on Ubuntu 24.04 LTS and Ubuntu 26.04 LTS (other releases fail fast).
 
 - **Bash scripts**: Root-level scripts for interactive or CI deployment
 - **Ansible playbook**: Idempotent, repeatable provisioning in `ansible/`
 
-The stack includes: Nginx (official nginx.org repo), PHP 8.4 FPM (Ondřej Surý's `packages.sury.org/php`), MariaDB, WordPress (latest), phpMyAdmin, Certbot (Let's Encrypt), Fail2Ban, and unattended upgrades.
+The stack includes: Nginx (official nginx.org repo), Hypertext Preprocessor (PHP) 8.4 FPM (Ondřej Surý's `packages.sury.org/php`), MariaDB, WordPress (latest), phpMyAdmin, Certbot (Let's Encrypt), Fail2Ban, and unattended upgrades.
+
+### Glossary
+
+- Hypertext Preprocessor (PHP): the language WordPress runs on, served by PHP FastCGI Process Manager (PHP-FPM)
+- Personal Package Archive (PPA): an Ubuntu third-party package repository
+- Virtual machine (VM); Internet Protocol (IP) address
+- WordPress (WP)
+- Must-use (MU) plugin: a WordPress plugin in `wp-content/mu-plugins/` that loads on each request and has no deactivate button in the admin UI
+- Cross-site scripting (XSS)
+- Remote Procedure Call (RPC); XML-RPC is WordPress's XML-based RPC endpoint, `xmlrpc.php`
+- Continue (CONT): the environment variable that answers "continue?" prompts in batch mode
 
 ## Command Reference
 
@@ -95,18 +106,18 @@ sudo cat /root/.wp-credentials
 
 ### Dual Deployment Paths
 
-The repository maintains **two parallel implementations** that must stay aligned when changing shared behavior:
+The repository maintains **two parallel implementations** that should stay aligned when changing shared behavior (one-path changes are fine when the task is explicitly scoped to that path):
 
 **Bash scripts** (root-level):
 
-- Entry: `install.sh` → orchestrates `setup-swap.sh` + `setup-wp-nginx.sh`
+- Entry: `install.sh` → orchestrates `setup-swap.sh` + `setup-wp-nginx.sh` + `setup-ops-agent.sh`
 - Direct system commands, environment variable configuration
 - Interactive prompts *or* environment variables for non-interactive mode
 - Credentials stored in `/root/.wp-credentials` (mode `0600`)
 
 **Ansible playbook** (`ansible/`):
 
-- Entry: `playbook.yml` → roles: `common` → `swap` → `wordpress` → `security`
+- Entry: `playbook.yml` → roles: `common` → `swap` → `wordpress` → `security` → `ops_agent`
 - Idempotent, declarative tasks with Jinja2 templates
 - `vars_prompt` for credentials (auto-generates secure passwords)
 - Same credential file format as Bash path
@@ -142,6 +153,12 @@ When modifying shared functionality (e.g., WordPress hardening, Nginx config, PH
 - File permissions: directories `0775`, files `0664`, `wp-config.php` `0640`
 - WordPress: MU-plugin disables XML-RPC pingback, security constants in `wp-config.php`
 
+**Google Cloud Ops Agent** (`setup-ops-agent.sh` or `ops_agent` role):
+
+- Only on GCP VMs by default (`ENABLE_OPS_AGENT`/`enable_ops_agent` = `auto`, detected via the Compute Engine metadata server)
+- Logging at agent defaults; metrics pipeline disabled (`receivers: []`) because Ops Agent metrics are billed per MiB beyond the billing account's 150 MiB/month free tier
+- If the agent install fails, a warning is logged and the WordPress deployment continues; check `systemctl status google-cloud-ops-agent` when the agent is required
+
 ### Template & Configuration Files
 
 **Ansible templates** (`ansible/roles/*/templates/`):
@@ -153,6 +170,7 @@ When modifying shared functionality (e.g., WordPress hardening, Nginx config, PH
 - `wp-credentials.j2`: Credential file template (matches Bash format)
 - `wp-updates.sh.j2`: Weekly cron script for WP updates
 - `50unattended-upgrades.j2`: Unattended upgrades config
+- `ops-agent-config.yaml.j2`: Ops Agent config (logging on, metrics off; matches the heredoc in `setup-ops-agent.sh`)
 
 **Files referenced by both paths**:
 
@@ -165,7 +183,7 @@ When modifying shared functionality (e.g., WordPress hardening, Nginx config, PH
 - **Shebang**: `#!/usr/bin/env bash` or `#!/bin/bash`
 - **Safety**: `set -euo pipefail` at the top of every script
 - **Variables**: UPPERCASE for exported/global, lowercase for local
-- **Quotes**: Always quote variable expansions (`"$VAR"`)
+- **Quotes**: Quote variable expansions (`"$var"`), except where word splitting is intended and commented
 - **Logging**: Use existing helper functions (`log_info`, `log_success`, `log_warn`, `log_error`)
 - **Idempotency**: Check for existing state before making changes (e.g., swap file, `wp-config.php`, certificates)
 
@@ -180,7 +198,7 @@ When modifying shared functionality (e.g., WordPress hardening, Nginx config, PH
 
 ### Testing Credentials
 
-**Test-only values** (never use in production):
+**Test-only values** (do not use in production; they exist only for Vagrant and CI runs):
 
 - Vagrant domain: `192.168.56.10.nip.io` or `vagrant.local`
 - MySQL root: `secure_root_password`
@@ -202,6 +220,7 @@ When modifying shared functionality (e.g., WordPress hardening, Nginx config, PH
 - `ENABLE_FAIL2BAN`: `y/n` (default: `y`)
 - `SKIP_CERTBOT`: `y` to skip SSL for CI/tests (default: `n`)
 - `SWAP_SIZE`: Swap file size (default: `2G`)
+- `ENABLE_OPS_AGENT`: `auto/y/n` Ops Agent with metrics off (default: `auto`, GCP VMs only)
 - `CONT`: `y` to skip confirmation prompts in batch mode
 
 ## Environment-Specific Behavior
@@ -209,7 +228,7 @@ When modifying shared functionality (e.g., WordPress hardening, Nginx config, PH
 **DNS Requirements**:
 
 - Production: Requires valid domain with DNS A record pointing to VM IP. Certbot will fail otherwise.
-- Vagrant: Uses `192.168.56.10.nip.io` or maps to `/etc/hosts`
+- Vagrant: Uses `192.168.56.10.nip.io`, which resolves to the VM's private IP; with `vagrant.local`, add an `/etc/hosts` entry on the host
 - CI/Hosted-runner: Maps domain to `127.0.0.1`, sets `SKIP_CERTBOT=y`
 
 **PHP Repository**:
@@ -221,12 +240,15 @@ When modifying shared functionality (e.g., WordPress hardening, Nginx config, PH
 
 **Credential Reuse**:
 
-- If `/root/.wp-credentials` exists, both paths reuse stored credentials instead of regenerating them. Bash parses the file directly; the Ansible playbook does the same in `pre_tasks` before its `vars_prompt` auto-generation fallback, so leaving the prompts blank on a re-run does not rotate the DB/root passwords out from under an already-configured site
-- This enables safe re-runs and idempotency
+- If `/root/.wp-credentials` exists, both paths reuse stored credentials instead of regenerating them.
+- Bash parses the file directly. The Ansible playbook parses it in `pre_tasks`, before its `vars_prompt` auto-generation fallback.
+- Leaving the prompts blank on a re-run therefore keeps the DB/root passwords of an already-configured site.
+- Credential reuse makes re-runs safe and idempotent
 
 **SSL/TLS**:
 
-- Both paths render the HTTPS server block themselves once a certificate exists (checked via `/etc/letsencrypt/live/$DOMAIN/fullchain.pem`), rather than relying on certbot's one-time in-place edit. This keeps re-runs from reverting the site to HTTP-only, since certbot itself only runs once (skipped on subsequent runs once the certificate exists)
+- When `/etc/letsencrypt/live/$DOMAIN/fullchain.pem` exists, the Bash script and the `wordpress` role write the HTTPS server block into the Nginx site config. Certbot's own one-time edit is not used.
+- Certbot only runs once; later runs skip it because the certificate exists. Rendering the HTTPS block ourselves stops re-runs from reverting the site to HTTP-only.
 
 - Production: Certbot with Let's Encrypt, auto-renewal via systemd timer
 - Testing: Skip with `SKIP_CERTBOT=y` (Bash) or `enable_ssl=false` (Ansible)
@@ -239,17 +261,17 @@ Both Bash and Ansible paths implement identical hardening:
 
 - `wp-config.php` constants: `DISALLOW_FILE_EDIT`, `FS_METHOD='direct'`, `FORCE_SSL_ADMIN`, `WP_AUTO_UPDATE_CORE='minor'`, `DISABLE_WP_CRON=true`
 - MU-plugin: `disable-xmlrpc-pingback.php` removes `X-Pingback` header and disables `pingback.ping`
-- Removed files: `readme.html`, `license.txt` from webroot
+- On every run, both paths delete `readme.html` and `license.txt` from the webroot
 - Default `admin` user removed and replaced with configured admin
 
 ### Nginx Security Configuration
 
-The Nginx configuration (identical in both paths) includes:
+The Nginx server block (identical in both paths) applies to every request and includes:
 
-- Security headers: `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `X-XSS-Protection`, `Content-Security-Policy`
+- On every response, Nginx sends security headers: `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `X-XSS-Protection`, `Content-Security-Policy`
 - Blocked paths: `wp-config.php`, `xmlrpc.php`, `readme.html`, `license.txt`, `install.php`, hidden files
 - PHP execution denied in `uploads/` and `files/`
-- Static asset caching with `expires max`
+- When serving static assets (images, CSS, JS, fonts), Nginx sets `expires max` so browsers cache them
 - phpMyAdmin at `/phpmyadmin`
 
 ### PHP-FPM Pool Sizing Formula
@@ -268,6 +290,17 @@ box doesn't get sized as if it had all its CPU cores' worth of workers:
 - `pm.max_requests = 500`
 
 This formula ensures optimal resource utilization based on available CPU and RAM.
+
+## Boundaries
+
+Do not:
+
+- Commit real secrets: passwords, tokens, or the contents of `/root/.wp-credentials`
+- Use the test-only credentials above in production
+- Change shared behavior in one deployment path only, unless the task is scoped to that path
+- Regenerate credentials when `/root/.wp-credentials` already exists
+- Add support for Ubuntu releases other than 24.04 and 26.04 without updating both paths and the tests
+- Edit vendored skills under `.agents/`; they are pinned by hash in `skills-lock.json`
 
 ## References
 
