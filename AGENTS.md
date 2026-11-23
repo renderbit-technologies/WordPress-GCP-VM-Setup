@@ -58,10 +58,11 @@ rather than inventing ad-hoc curls.
   not a bug to fix.
 - **The playbook has `vars_prompt`**, so unattended runs silently take the blank defaults and
   auto-generate. Pass `-e wp_db_pass=... -e wp_admin_pass=... -e mysql_root_pass=...` to control them.
-- **PHP comes only from `packages.sury.org/php`** on both releases. `ppa:ondrej/php` is frozen;
-  re-runs migrate 24.04 sites off it (install `debsuryorg-repository-php`, then remove the PPA).
-  Never write `php.list` when `php.sources` exists (apt fails on two entries with different
-  `signed-by`), and don't delete `/usr/share/keyrings/deb.sury.org-php.gpg`: the
+- **PHP comes only from `packages.sury.org/php`** on both releases. `ppa:ondrej/php` is frozen.
+  Re-runs migrate 24.04 sites off it: install `debsuryorg-repository-php`, then remove the PPA.
+- **In the PHP repository step, skip `php.list` when `php.sources` exists.** Apt fails on two
+  entries for one repository with different `signed-by` keyrings.
+- **In the PHP repository step, keep `/usr/share/keyrings/deb.sury.org-php.gpg`.** The
   `debsuryorg-archive-keyring` package owns it.
 - **`ansible/Vagrantfile` does not use `inventory.ini`**: it provisions with `ansible_local` and
   inline `extra_vars`, and syncs `../tests` to `/vagrant-tests`. The Ansible harness breaks if

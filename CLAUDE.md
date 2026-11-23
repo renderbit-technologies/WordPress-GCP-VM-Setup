@@ -70,7 +70,7 @@ cd ansible && vagrant destroy -f
 - `shellcheck.yml`: Lints all `.sh` files on push/PR
 - `bash-test.yml`: Vagrant-based integration test for shell scripts
 - `ansible-test.yml`: Vagrant-based integration test for Ansible playbook
-- Both Vagrant workflows also run a 24.04 "upgrade from main" job: provision from `main`, check out the code under test, re-provision, then run `tests/verify-deployment.sh`
+- Both Vagrant workflows also run a 24.04 "upgrade from main" job. It provisions from `main`, checks out the code under test, provisions again, then runs `tests/verify-deployment.sh`
 - `codacy.yml`: Security scanning with Trivy
 
 ### Deployment
@@ -233,10 +233,11 @@ When modifying shared functionality (e.g., WordPress hardening, Nginx config, PH
 
 **PHP Repository**:
 
-- Both paths install PHP only from `packages.sury.org/php`, set up as its `README.txt` says (`debsuryorg-archive-keyring` + `php.list`). `ppa:ondrej/php` is frozen
-- Sites first installed from the PPA (24.04, before #46) are migrated on re-run as the PPA's Launchpad page says: install `debsuryorg-repository-php` (writes `php.sources`), then remove the PPA source and key. When `php.sources` exists, `php.list` is not written (two entries with different `signed-by` make apt fail)
-- `/usr/share/keyrings/deb.sury.org-php.gpg` is owned by `debsuryorg-archive-keyring`; don't delete it
-- `tests/verify-deployment.sh` fails if the PPA is still configured or packages.sury.org is configured in more than one file
+- Both paths install PHP only from `packages.sury.org/php`. New installs follow its `README.txt`: install `debsuryorg-archive-keyring`, then write `php.list`
+- `ppa:ondrej/php` is frozen. On re-run, both paths migrate 24.04 sites installed from it, as its Launchpad page says: install `debsuryorg-repository-php`, then remove the PPA source and key
+- `debsuryorg-repository-php` writes `php.sources`. When that file exists, both paths skip `php.list`, because apt fails on two entries for one repository with different `signed-by` keyrings
+- When editing the PHP repository step, keep `/usr/share/keyrings/deb.sury.org-php.gpg`: the `debsuryorg-archive-keyring` package owns it
+- `tests/verify-deployment.sh` fails if the PPA is still configured, or if packages.sury.org is configured in more than one file
 
 **Credential Reuse**:
 
